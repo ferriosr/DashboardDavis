@@ -1,0 +1,23 @@
+# Environment variables — NEVER commit real keys
+.env
+*.env.local
+
+# Frontend dependencies and build output
+FRONTEND/node_modules/
+FRONTEND/dist/
+FRONTEND/.vite/
+
+# Old folder — ya migrado a FRONTEND/, se puede borrar manualmente
+dashboard-react/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
