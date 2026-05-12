@@ -5,10 +5,9 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      '/api_davis.php': {
-        target: 'http://localhost',
+      '/api/davis': {
+        target: 'http://localhost:3001',
         changeOrigin: true,
-        rewrite: (path) => `/CALIDAD/BACKEND${path}`,
       },
     },
   },
