@@ -3,7 +3,10 @@ import { motion, AnimatePresence } from 'framer-motion'
 
 const pages = [
   { id: 'dashboard', label: 'Dashboard', icon: '🍃' },
-  { id: 'modelo',    label: 'Modelo',    icon: '🤖' },
+  {
+    id: 'modelo', label: 'Modelo', icon: '🤖',
+  },
+  {  id: 'historico', label: 'Dashboard Histórico', icon: '📊' }
 ]
 
 const EXPANDED_W  = 200
@@ -36,34 +39,69 @@ export default function Sidebar({ currentPage, onNavigate }) {
         {pages.map(p => {
           const active = currentPage === p.id
           return (
-            <button
-              key={p.id}
-              className={`sidebar-item${active ? ' sidebar-item-active' : ''}`}
-              onClick={() => onNavigate(p.id)}
-              title={!expanded ? p.label : undefined}
-            >
-              {active && (
-                <motion.div
-                  className="sidebar-item-bg"
-                  layoutId="sidebar-active-bg"
-                  transition={{ type: 'spring', stiffness: 350, damping: 30 }}
-                />
-              )}
-              <span className="sidebar-item-icon">{p.icon}</span>
-              <AnimatePresence>
-                {expanded && (
-                  <motion.span
-                    className="sidebar-item-label"
-                    initial={{ opacity: 0, x: -8 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -8 }}
-                    transition={{ duration: 0.18 }}
-                  >
-                    {p.label}
-                  </motion.span>
+            <div key={p.id}>
+              <button
+                className={`sidebar-item${active ? ' sidebar-item-active' : ''}`}
+                onClick={() => onNavigate(p.id)}
+                title={!expanded ? p.label : undefined}
+              >
+                {active && (
+                  <motion.div
+                    className="sidebar-item-bg"
+                    layoutId="sidebar-active-bg"
+                    transition={{ type: 'spring', stiffness: 350, damping: 30 }}
+                  />
                 )}
-              </AnimatePresence>
-            </button>
+                <span className="sidebar-item-icon">{p.icon}</span>
+                <AnimatePresence>
+                  {expanded && (
+                    <motion.span
+                      className="sidebar-item-label"
+                      initial={{ opacity: 0, x: -8 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -8 }}
+                      transition={{ duration: 0.18 }}
+                    >
+                      {p.label}
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+              </button>
+
+              {p.children && p.children.map(child => {
+                const childActive = currentPage === child.id
+                return (
+                  <button
+                    key={child.id}
+                    className={`sidebar-item sidebar-item-child${childActive ? ' sidebar-item-active' : ''}`}
+                    onClick={() => onNavigate(child.id)}
+                    title={!expanded ? child.label : undefined}
+                  >
+                    {childActive && (
+                      <motion.div
+                        className="sidebar-item-bg"
+                        layoutId="sidebar-active-bg"
+                        transition={{ type: 'spring', stiffness: 350, damping: 30 }}
+                      />
+                    )}
+                    <span className="sidebar-item-icon">{child.icon}</span>
+                    <AnimatePresence>
+                      {expanded && (
+                        <motion.span
+                          className="sidebar-item-label"
+                          initial={{ opacity: 0, x: -8 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: -8 }}
+                          transition={{ duration: 0.18 }}
+                        >
+                          {child.label}
+                        </motion.span>
+                      )}
+                    </AnimatePresence>
+                  </button>
+                )
+              })}
+            </div>
           )
         })}
       </nav>
