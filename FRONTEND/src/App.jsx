@@ -6,6 +6,7 @@ import NotificationsPanel from './components/NotificationsPanel'
 import DashboardHistorico from './pages/DashboardHistorico'
 import Modelo from './pages/Modelo'
 import DashboardCalidadAire from './pages/DashboardCalidadAire'
+import CamaraIsla from './components/CamaraIsla'
 
 export default function App() {
   const [theme, setTheme] = useState(() => {
@@ -62,6 +63,8 @@ export default function App() {
       />
 
       {currentPage === 'modelo' && <Modelo />}
+
+      {currentPage === 'camara' && <CamaraIsla />}
 
       {currentPage === 'historico' && <DashboardHistorico theme={theme} />}
 

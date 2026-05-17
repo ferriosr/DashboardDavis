@@ -1070,6 +1070,91 @@ canvas {
   flex-shrink: 0;
 }
 
+.modelo-result {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.modelo-sim-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--card-radius);
+  padding: 22px;
+}
+
+.modelo-sim-card,
+.modelo-prediction-card {
+  background: var(--card-bg);
+  border-radius: var(--card-radius);
+  border: 1px solid var(--border);
+  box-shadow: var(--card-shadow);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.modelo-prediction-title {
+  font-size: 20px;
+  font-weight: 900;
+  color: var(--text-dark);
+}
+
+.modelo-prediction-value {
+  font-size: 40px;
+  font-weight: 900;
+  color: var(--text-dark);
+}
+
+.modelo-prediction-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  color: var(--text-sub);
+  font-size: 14px;
+}
+
+.modelo-prediction-info {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--text-sub);
+}
+
+.modelo-prediction-info ul {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-sub);
+}
+
+.modelo-error-card {
+  background: #fff4f4;
+  border: 1px solid #f5c2c2;
+  border-radius: 18px;
+  padding: 24px;
+  color: #8f1d1d;
+  box-shadow: 0 20px 40px rgba(223, 82, 82, 0.08);
+}
+
+.modelo-error-title {
+  font-size: 18px;
+  font-weight: 800;
+  margin-bottom: 12px;
+}
+
+.modelo-error-text {
+  font-size: 14px;
+  line-height: 1.7;
+  color: #652d2d;
+}
+
 /* ── Responsive ── */
 @media (max-width: 900px) {
   .app-layout {

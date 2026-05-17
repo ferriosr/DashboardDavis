@@ -6,6 +6,7 @@ const pages = [
   {
     id: 'modelo', label: 'Modelo', icon: '🤖',
   },
+  {  id: 'camara', label: 'Cámara Isla', icon: '📹' },
   {  id: 'historico', label: 'Dashboard Histórico', icon: '📊' }
 ]
 
