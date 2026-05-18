@@ -584,7 +584,7 @@ export default function DashboardHistorico({ theme }) {
         <div className="hist-footer-text">Sensor Davis AirLink · WeatherLink API · {monthly[0]?.month} – {monthly[monthly.length - 1]?.month}</div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <div className="hist-badge-blue">NOM-172-SEMARNAT-2023</div>
-          <div className="hist-footer-text" style={{ marginLeft: 8 }}>Generado con datos históricos de Supabase</div>
+          <div className="hist-footer-text" style={{ marginLeft: 8 }}>Generado con datos históricos del sensor Davis</div>
         </div>
       </div>
     </div>

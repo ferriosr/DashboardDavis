@@ -78,6 +78,21 @@ export default function DashboardCalidadAire({ data, history, theme }) {
       </div>
 
 
+      <div className="cards-row row-video">
+        <div className="card card-video">
+          <div className="card-content">
+            <div className="card-title">Isla de Datos Urbanos</div>
+            <div className="card-subtitle">Cámara de Monitoreo</div>
+            <div className="video-placeholder">
+              <div className="video-placeholder-icon">📹</div>
+              <div className="video-placeholder-text">Próximamente</div>
+              <div className="video-placeholder-sub">La transmisión en vivo estará disponible en una actualización futura</div>
+            </div>
+            <div className="card-badge badge-muted">Sin conexión</div>
+          </div>
+        </div>
+      </div>
+
       <div className="footer">Davis AirLink · WeatherLink API · UrbanDataIsland</div>
 
       {modalType && (
