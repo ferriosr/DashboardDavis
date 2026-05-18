@@ -1,6 +1,11 @@
 import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
+import { readFileSync, existsSync } from 'fs'
+import { join, dirname } from 'path'
+import { fileURLToPath } from 'url'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -43,23 +48,19 @@ app.get('/api/davis', async (req, res) => {
     }
 
     if (type === 'history') {
-      const since = new Date(Date.now() - 3 * 60 * 60 * 1000)
-        .toISOString()
-        .replace('T', ' ')
-        .slice(0, 19)
       const url =
         `${SUPABASE_URL}/rest/v1/lecturas_davis` +
         `?select=hora_sensor_utc,aqi,pm2_5,pm10` +
-        `&order=hora_sensor_utc.asc` +
-        `&hora_sensor_utc=gte.${encodeURIComponent(since)}` +
-        `&limit=180`
+        `&order=hora_sensor_utc.desc` +
+        `&limit=36`
       const rows = await supabaseFetch(url)
-      return res.json(rows ?? [])
+      const sorted = (rows ?? []).reverse()
+      return res.json(sorted)
     }
 
     if (type === 'historico') {
-      const fromDate = req.query.from  // optional YYYY-MM-DD
-      const toDate   = req.query.to    // optional YYYY-MM-DD
+      const fromDate = req.query.from
+      const toDate   = req.query.to
 
       const allRows = []
       const batchSize = 1000
@@ -138,7 +139,7 @@ app.get('/api/davis', async (req, res) => {
         pm25: hourlyMap[h] ? +avg(hourlyMap[h].pm25).toFixed(1) : 0,
       }))
 
-      const allAqi = allRows.map(r => parseFloat(r.aqi) || 0)
+      const allAqi  = allRows.map(r => parseFloat(r.aqi) || 0)
       const allPm25 = allRows.map(r => parseFloat(r.pm2_5) || 0)
       const allPm10 = allRows.map(r => parseFloat(r.pm10) || 0)
 
@@ -147,18 +148,18 @@ app.get('/api/davis', async (req, res) => {
         monthly,
         hourly,
         distribution: {
-          good: pct(dist.good),
-          moderate: pct(dist.moderate),
-          usg: pct(dist.usg),
-          unhealthy: pct(dist.unhealthy),
+          good:         pct(dist.good),
+          moderate:     pct(dist.moderate),
+          usg:          pct(dist.usg),
+          unhealthy:    pct(dist.unhealthy),
           veryUnhealthy: pct(dist.veryUnhealthy),
         },
         overallAvg: {
-          aqi: +avg(allAqi).toFixed(1),
-          pm25: +avg(allPm25).toFixed(1),
-          pm10: +avg(allPm10).toFixed(1),
-          temp: +avg(allRows.map(r => parseFloat(r.temperatura) || 0)).toFixed(1),
-          hum: +avg(allRows.map(r => parseFloat(r.humedad) || 0)).toFixed(1),
+          aqi:    +avg(allAqi).toFixed(1),
+          pm25:   +avg(allPm25).toFixed(1),
+          pm10:   +avg(allPm10).toFixed(1),
+          temp:   +avg(allRows.map(r => parseFloat(r.temperatura) || 0)).toFixed(1),
+          hum:    +avg(allRows.map(r => parseFloat(r.humedad) || 0)).toFixed(1),
           maxPm25: allPm25.length ? +Math.max(...allPm25).toFixed(0) : 0,
           maxPm10: allPm10.length ? +Math.max(...allPm10).toFixed(0) : 0,
         },
@@ -166,9 +167,9 @@ app.get('/api/davis', async (req, res) => {
     }
 
     if (type === 'heatmap') {
-      const from  = req.query.from   // YYYY-MM-DD
-      const to    = req.query.to     // YYYY-MM-DD
-      const group = req.query.group ?? 'day'  // 'day' | 'month'
+      const from  = req.query.from
+      const to    = req.query.to
+      const group = req.query.group ?? 'day'
 
       if (!from || !to) return res.status(400).json({ error: 'from and to are required' })
 
@@ -244,6 +245,49 @@ app.get('/api/davis', async (req, res) => {
     console.error('API error:', err.message)
     res.status(500).json({ error: err.message })
   }
+})
+
+//  Predicción AQI +1 hora (Python) 
+app.get('/api/prediccion', async (req, res) => {
+  try {
+    const response = await fetch('http://127.0.0.1:5000/predecir', {
+      signal: AbortSignal.timeout(10000),
+    })
+    if (!response.ok) throw new Error(`Python API ${response.status}`)
+    const data = await response.json()
+    res.json(data)
+  } catch (err) {
+    console.error('Error prediccion:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+//  Datos del modelo: y_real vs y_predicho 
+function parsearCSV(ruta) {
+  const lineas  = readFileSync(ruta, 'utf8').trim().split('\n')
+  const headers = lineas[0].split(',').map(h => h.trim())
+  return lineas.slice(1).map(linea => {
+    const vals = linea.split(',')
+    const fila = {}
+    headers.forEach((h, i) => {
+      const raw = (vals[i] || '').trim()
+      fila[h]  = isNaN(raw) || raw === '' ? raw : parseFloat(raw)
+    })
+    return fila
+  })
+}
+
+
+app.get('/api/modelo', (req, res) => {
+  //const ruta = new URL('./static_data/predicciones_test.csv', import.meta.url).pathname
+  const ruta = join(__dirname, 'static_data', 'predicciones_test.csv')
+  console.log('Buscando CSV en:', ruta)
+  console.log('Existe:', existsSync(ruta))
+  if (!existsSync(ruta)) {
+    return res.status(404).json({ error: 'CSV no encontrado.' })
+  }
+  const datos = parsearCSV(ruta)
+  res.json(datos)
 })
 
 app.listen(PORT, () => console.log(`Backend corriendo en http://localhost:${PORT}`))
