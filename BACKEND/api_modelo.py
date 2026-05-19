@@ -19,11 +19,17 @@ CORS(app)
 # Generados desde el notebook con:
 #   modelo_xgb.save_model('modelo_aqi.json')
 #   json.dump(FEATURES, open('features.json','w'))
+#PASO AGREGADO PARA MV
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ruta_modelo = os.path.join(BASE_DIR, 'modelo_aqi.json')
+ruta_features = os.path.join(BASE_DIR, 'features.json')
 
 modelo_xgb = xgb.XGBRegressor()
-modelo_xgb.load_model('modelo_aqi.json')
+#modelo_xgb.load_model('modelo_aqi.json')
+modelo_xgb.load_model(ruta_modelo)
 
-with open('features.json') as f:
+#with open('features.json') as f:
+with open(ruta_features) as f:
     FEATURES = json.load(f)
 
 # ── CONSTANTES (igual que el notebook) ───────────────────────
