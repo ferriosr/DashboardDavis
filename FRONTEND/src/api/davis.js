@@ -9,3 +9,9 @@ export async function fetchHistory() {
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return res.json()
 }
+
+export async function fetchRecomendacion() {
+  const res = await fetch('/api/recomendacion', { cache: 'no-store' })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
+}

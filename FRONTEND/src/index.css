@@ -100,7 +100,7 @@ body {
   font-family: var(--font);
   background: var(--bg);
   min-height: 100vh;
-  padding: 20px;
+  padding: 14px;
   color: var(--text-dark);
   transition: background-color 0.3s ease, color 0.3s ease;
 }
@@ -110,7 +110,7 @@ body {
   max-width: 1380px;
   margin: 0 auto;
   display: flex;
-  gap: 18px;
+  gap: 14px;
   align-items: flex-start;
 }
 
@@ -233,7 +233,7 @@ body {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 12px;
 }
 
 /* ── Header ── */
@@ -249,20 +249,20 @@ body {
   display: flex;
   align-items: center;
   background: var(--header-brand-bg);
-  padding: 15px 30px;
+  padding: 12px 24px;
   border-radius: 20px;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.04);
   border: 1px solid var(--border);
   flex-grow: 1;
-  gap: 18px;
+  gap: 14px;
   transition: background-color 0.3s, border-color 0.3s;
 }
 
 .header-icon {
   background: var(--blue-light);
-  padding: 12px;
-  border-radius: 15px;
-  font-size: 28px;
+  padding: 9px;
+  border-radius: 13px;
+  font-size: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -271,7 +271,7 @@ body {
 }
 
 .header-title {
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 900;
   color: var(--text-dark);
   letter-spacing: -1px;
@@ -353,12 +353,12 @@ body {
 
 .header-time {
   background: var(--header-time-bg);
-  padding: 15px 25px;
+  padding: 12px 20px;
   border-radius: 20px;
   text-align: center;
   box-shadow: 0 5px 15px rgba(45, 98, 237, 0.1);
   border: 2px solid var(--blue);
-  min-width: 200px;
+  min-width: 170px;
   flex-shrink: 0;
   transition: background-color 0.3s, border-color 0.3s;
 }
@@ -374,7 +374,7 @@ body {
 }
 
 .header-time-value {
-  font-size: 22px;
+  font-size: 19px;
   font-weight: 900;
   color: var(--blue);
   font-family: 'DM Mono', monospace;
@@ -383,12 +383,12 @@ body {
 /* ── Cards row ── */
 .cards-row {
   display: flex;
-  gap: 18px;
+  gap: 14px;
 }
 
 .card {
   background: var(--card-bg);
-  padding: 28px;
+  padding: 20px 24px;
   border-radius: var(--card-radius);
   box-shadow: var(--card-shadow);
   border: 1px solid var(--border);
@@ -412,8 +412,8 @@ body {
 .card-emoji {
   position: absolute;
   right: 14px;
-  top: 18px;
-  font-size: 60px;
+  top: 14px;
+  font-size: 48px;
   filter: drop-shadow(0px 4px 4px rgba(0, 0, 0, 0.1));
   pointer-events: none;
   transition: transform 0.3s ease;
@@ -429,43 +429,43 @@ body {
 }
 
 .card-title {
-  font-size: 28px;
+  font-size: 22px;
   font-weight: 900;
   color: var(--text-dark);
   letter-spacing: 1px;
 }
 
 .card-subtitle {
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--text-muted);
   text-transform: uppercase;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .card-value {
-  font-size: 52px;
+  font-size: 42px;
   font-weight: 800;
   line-height: 1;
 }
 
 .card-unit {
-  font-size: 24px;
+  font-size: 20px;
   margin-left: 2px;
   vertical-align: middle;
 }
 
 .card-value-sub {
-  font-size: 24px;
+  font-size: 20px;
   color: var(--text-muted);
 }
 
 .card-badge {
-  margin-top: 18px;
+  margin-top: 10px;
   display: inline-block;
-  padding: 6px 16px;
+  padding: 4px 12px;
   border-radius: 10px;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
   text-transform: uppercase;
 }
@@ -479,12 +479,12 @@ body {
 .rec-card {
   display: flex;
   align-items: center;
-  padding: 20px 28px;
+  padding: 14px 22px;
   border-radius: var(--card-radius);
   border: 2px solid;
   font-family: var(--font);
   box-shadow: 0 10px 15px rgba(0, 0, 0, 0.05);
-  gap: 20px;
+  gap: 16px;
   animation: fadeSlideUp 0.5s 0.3s ease both;
   transition: transform 0.25s ease;
 }
@@ -494,23 +494,50 @@ body {
 }
 
 .rec-icon {
-  font-size: 45px;
+  font-size: 36px;
   flex-shrink: 0;
 }
 
 .rec-label {
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 1px;
-  margin-bottom: 5px;
+  margin-bottom: 4px;
+}
+
+.rec-body {
+  flex: 1;
+  min-width: 0;
 }
 
 .rec-text {
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--text-dark);
   line-height: 1.4;
+}
+
+.rec-tendencia {
+  font-size: 11px;
+  font-weight: 700;
+  margin-left: 10px;
+  letter-spacing: 0.5px;
+}
+
+.rec-exposed {
+  font-size: 13px;
+  font-weight: 500;
+  margin-top: 6px;
+  opacity: 0.85;
+  line-height: 1.4;
+}
+
+.rec-contexto {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 5px;
+  font-style: italic;
 }
 
 /* ── Chart section ── */

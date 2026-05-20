@@ -32,17 +32,42 @@ class ContextoUniversidad:
     personas_detectadas: int = 0   # conteo de personas por cámara (0 = sin dato)
     humo_detectado: bool = False   # humo de tabaco detectado por visión artificial
 
+    # Recesos fijos ESCOM: (inicio_min, fin_min) en minutos desde medianoche
+    _RECESOS_MIN = [
+        (10 * 60,       10 * 60 + 30),   # 10:00 – 10:30
+        (18 * 60,       18 * 60 + 30),   # 18:00 – 18:30
+    ]
+
+    # Inicio de cada bloque de clase ESCOM, en minutos desde medianoche
+    # Bloques de 1.5 h: 7:00, 8:30, (receso 10-10:30), 10:30, 12:00,
+    #                   13:30, 15:00, 16:30, (receso 18-18:30), 18:30, 20:00
+    _CAMBIOS_MIN = [
+        7 * 60,
+        8 * 60 + 30,
+        10 * 60 + 30,
+        12 * 60,
+        13 * 60 + 30,
+        15 * 60,
+        16 * 60 + 30,
+        18 * 60 + 30,
+        20 * 60,
+    ]
+
     @classmethod
-    def desde_datetime(cls, dt: datetime, es_receso: bool = False,
+    def desde_datetime(cls, dt: datetime,
                        personas_detectadas: int = 0,
                        humo_detectado: bool = False) -> "ContextoUniversidad":
         hora = dt.hour
-        # Cambios de clase ESCOM típicos: :00 y :30 de cada hora en horario escolar
+        total_min = hora * 60 + dt.minute
+
+        es_receso = any(ini <= total_min < fin for ini, fin in cls._RECESOS_MIN)
+
+        # Ventana ±5 min alrededor de cada inicio de clase
         es_cambio = (
             not es_receso
-            and 7 <= hora <= 20
-            and dt.minute in (0, 25, 30, 55)
+            and any(abs(total_min - c) <= 5 for c in cls._CAMBIOS_MIN)
         )
+
         return cls(
             hora=hora,
             dia_semana=dt.weekday(),

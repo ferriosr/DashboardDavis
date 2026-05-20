@@ -488,6 +488,19 @@ app.get('/api/video/status', async (req, res) => {
   }
 })
 
+app.get('/api/recomendacion', async (req, res) => {
+  try {
+    const params = new URLSearchParams(req.query).toString()
+    const url = `http://localhost:8000/api/recomendacion${params ? '?' + params : ''}`
+    const r = await fetch(url, { signal: AbortSignal.timeout(5000) })
+    const data = await r.json()
+    if (!r.ok) return res.status(r.status).json(data)
+    return res.json(data)
+  } catch (err) {
+    res.status(503).json({ error: 'Motor de recomendaciones no disponible', detail: err.message })
+  }
+})
+
 app.get('/api/davis', async (req, res) => {
   const type = req.query.type ?? 'latest'
 

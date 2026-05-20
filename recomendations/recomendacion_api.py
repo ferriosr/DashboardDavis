@@ -125,15 +125,16 @@ async def estado():
 
 @app.get("/api/recomendacion", response_model=RecomendacionResponse)
 async def recomendacion(
-    es_receso: bool = False,
     personas: int = 0,
     humo: bool = False,
 ):
     """
     Parámetros opcionales:
-      ?es_receso=true         → ajusta recomendación para periodo vacacional
-      ?personas=25            → conteo de personas detectadas por cámara
-      ?humo=true              → humo de tabaco detectado por cámara
+      ?personas=25  → conteo de personas detectadas por cámara
+      ?humo=true    → humo de tabaco detectado por cámara
+
+    El receso y los cambios de clase se detectan automáticamente
+    según el horario fijo de ESCOM.
 
     server.js lo llama así:
       fetch('http://localhost:8000/api/recomendacion')
@@ -151,7 +152,6 @@ async def recomendacion(
     ts_actual = historial[-1]["ts"]
     contexto = ContextoUniversidad.desde_datetime(
         ts_actual if isinstance(ts_actual, datetime) else datetime.fromisoformat(str(ts_actual)),
-        es_receso=es_receso,
         personas_detectadas=personas,
         humo_detectado=humo,
     )
@@ -167,7 +167,7 @@ async def recomendacion(
 #
 #   from motor_recomendaciones import MotorRecomendaciones, ContextoUniversidad
 #   motor = MotorRecomendaciones()   # fuera del loop
-#   ctx = ContextoUniversidad.desde_datetime(reloj_simulado, es_receso=False)
+#   ctx = ContextoUniversidad.desde_datetime(reloj_simulado)
 #   rec = motor.generar(historial_15min, ctx)
 #   print(f"   [RECOMENDACION] {rec.banda_nombre} {rec.icono_tendencia}")
 #   print(f"   {rec.mensaje_general}")

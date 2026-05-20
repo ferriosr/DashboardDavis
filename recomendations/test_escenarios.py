@@ -54,7 +54,7 @@ ESCENARIOS = [
         ],
         "personas": 22,
         "humo": False,
-        "es_receso": False,
+
     },
 
     # 2. Fumador detectado - grupos sensibles en riesgo
@@ -69,7 +69,7 @@ ESCENARIOS = [
         ],
         "personas": 28,
         "humo": True,
-        "es_receso": False,
+
     },
 
     # 3. Pico critico - alta contaminacion + maxima ocupacion
@@ -84,7 +84,7 @@ ESCENARIOS = [
         ],
         "personas": 38,
         "humo": True,
-        "es_receso": False,
+
     },
 
     # 4. Tarde tranquila - aire bueno, pocos alumnos
@@ -99,7 +99,7 @@ ESCENARIOS = [
         ],
         "personas": 6,
         "humo": False,
-        "es_receso": False,
+
     },
 
     # 5. Sin historial - modo basico (1 solo registro)
@@ -111,7 +111,7 @@ ESCENARIOS = [
         ],
         "personas": 12,
         "humo": False,
-        "es_receso": False,
+
     },
 ]
 
@@ -168,7 +168,6 @@ def main():
         hist = esc["historial"](ts)
         ctx  = ContextoUniversidad.desde_datetime(
             ts,
-            es_receso=esc["es_receso"],
             personas_detectadas=esc["personas"],
             humo_detectado=esc["humo"],
         )
