@@ -15,3 +15,9 @@ export async function fetchRecomendacion() {
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return res.json()
 }
+
+export async function fetchPrediccion() {
+  const res = await fetch('/api/prediccion', { cache: 'no-store' })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
+}

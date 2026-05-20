@@ -1,10 +1,15 @@
 function formatTs(isoStr) {
   if (!isoStr) return '--'
-  const [date, time] = isoStr.split(' ')
-  if (!date) return '--'
-  const [y, m, d] = date.split('-')
-  const hhmm = time ? time.slice(0, 5) : '--:--'
-  return `${d}/${m}/${y} ${hhmm}`
+  // Normaliza "YYYY-MM-DD HH:MM:SS" → "YYYY-MM-DDTHH:MM:SSZ" para parseo correcto
+  const iso = isoStr.replace(' ', 'T') + (isoStr.includes('+') || isoStr.endsWith('Z') ? '' : 'Z')
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return '--'
+  const dd   = String(d.getDate()).padStart(2, '0')
+  const mm   = String(d.getMonth() + 1).padStart(2, '0')
+  const yyyy = d.getFullYear()
+  const hh   = String(d.getHours()).padStart(2, '0')
+  const min  = String(d.getMinutes()).padStart(2, '0')
+  return `${dd}/${mm}/${yyyy} ${hh}:${min}`
 }
 
 export default function Header({ lastTs, theme, onToggleTheme, onReload, reloading, unreadCount, onOpenNotifications }) {

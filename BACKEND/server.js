@@ -1,10 +1,10 @@
 import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
-import path from 'path'
-import { spawn } from 'child_process'
+import { readFileSync, existsSync, writeFileSync } from 'fs'
+import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
-import { writeFileSync } from 'fs'
+import { spawn } from 'child_process'
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -12,8 +12,8 @@ const PORT = process.env.PORT || 3001
 const SUPABASE_URL = process.env.SUPABASE_URL
 const SUPABASE_KEY = process.env.SUPABASE_KEY
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const PREDICT_SCRIPT = path.join(__dirname, 'predict_model.py')
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const PREDICT_SCRIPT = join(__dirname, 'predict_model.py')
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
   console.error('ERROR: Faltan SUPABASE_URL o SUPABASE_KEY en .env')
@@ -98,7 +98,7 @@ function average(values) {
 
 function randomBetween(min, max) {
   return min + Math.random() * (max - min)
-}
+} 
 
 app.get('/api/modelo/simulacion', async (req, res) => {
   try {
@@ -195,99 +195,6 @@ app.get('/api/modelo/simulacion', async (req, res) => {
   }
 })
 
-app.get('/api/modelo', async (req, res) => {
-  try {
-    const url =
-      `${SUPABASE_URL}/rest/v1/lecturas_davis` +
-      `?select=hora_sensor_utc,pm2_5,pm10,temperatura,humedad,aqi,pm1` +
-      `&order=hora_sensor_utc.desc&limit=50`
-
-    const rows = await supabaseFetch(url)
-    if (!rows?.length) {
-      return res.status(404).json({ error: 'No se encontraron datos de Davis' })
-    }
-
-    const bucketsMap = new Map()
-    for (const row of rows) {
-      const dt = new Date(row.hora_sensor_utc.replace(' ', 'T') + 'Z')
-      if (Number.isNaN(dt.getTime())) continue
-
-      const key = floorTo15(dt).toISOString()
-      const bucket = bucketsMap.get(key) ?? {
-        date: new Date(key),
-        pm25: [],
-        pm10: [],
-        temp: [],
-        hum: [],
-        aqi: [],
-        pm1: [],
-      }
-
-      bucket.pm25.push(parseFloat(row.pm2_5) || 0)
-      bucket.pm10.push(parseFloat(row.pm10) || 0)
-      bucket.temp.push(parseFloat(row.temperatura) || 0)
-      bucket.hum.push(parseFloat(row.humedad) || 0)
-      bucket.aqi.push(parseFloat(row.aqi) || 0)
-      bucket.pm1.push(parseFloat(row.pm1) || 0)
-      bucketsMap.set(key, bucket)
-    }
-
-    const buckets = Array.from(bucketsMap.values()).sort((a, b) => b.date - a.date)
-    if (buckets.length < 4) {
-      return res.status(400).json({ error: 'Se requieren al menos 4 bloques de 15 minutos para generar la predicción' })
-    }
-
-    const [actual, h1, h2, h3] = buckets
-    const recentBlocks = [actual, h1, h2, h3].map((block) => ({
-      date: block.date.toISOString(),
-      pm25: +average(block.pm25).toFixed(2),
-      pm10: +average(block.pm10).toFixed(2),
-    }))
-
-    const recentPm25 = [
-      average(actual.pm25),
-      average(h1.pm25),
-      average(h2.pm25),
-      average(h3.pm25),
-    ]
-    const rollingMean = average(recentPm25)
-    const rollingStd = Math.sqrt(
-      average(recentPm25.map((value) => Math.pow(value - rollingMean, 2)))
-    )
-
-    const features = {
-      temp: average(actual.temp),
-      hum: average(actual.hum),
-      pm10: average(actual.pm10),
-      aqi: average(actual.aqi),
-      pm1: average(actual.pm1),
-      pm25_lag_1: average(actual.pm25),
-      pm10_lag_1: average(actual.pm10),
-      pm25_lag_2: average(h1.pm25),
-      pm10_lag_2: average(h1.pm10),
-      pm25_lag_3: average(h2.pm25),
-      pm10_lag_3: average(h2.pm10),
-      diff_pm25: average(actual.pm25) - average(h1.pm25),
-      rolling_mean_pm25: rollingMean,
-      rolling_std_pm25: rollingStd,
-      hour: actual.date.getUTCHours(),
-      day_of_week: actual.date.getUTCDay(),
-      time_gap: 15.0,
-    }
-
-    const pythonResult = await runPythonPrediction(features)
-    return res.json({
-      modelName: pythonResult.modelName,
-      prediction: +pythonResult.prediction.toFixed(2),
-      threshold: pythonResult.threshold,
-      features,
-      recentBlocks,
-    })
-  } catch (err) {
-    console.error('Modelo error:', err.message)
-    res.status(500).json({ error: err.message })
-  }
-})
 
 app.get('/api/modelo/validacion', async (req, res) => {
   try {
@@ -411,7 +318,7 @@ app.post('/api/video/stream', async (req, res) => {
 
     const timestamp = Date.now()
     const filename = `video_${timestamp}.mp4`
-    const filepath = path.join(__dirname, 'uploads', filename)
+    const filepath = join(__dirname, 'uploads', filename)
 
     try {
       writeFileSync(filepath, videoData)
@@ -488,16 +395,81 @@ app.get('/api/video/status', async (req, res) => {
   }
 })
 
+const BANDAS = [
+  {
+    nivel: 0,
+    nombre: 'Buena',
+    pm25_max: 12,
+    mensaje_general: 'Calidad del aire excelente. El ambiente es seguro para todas las personas.',
+    mensaje_expuesto: null,
+    contexto: null,
+  },
+  {
+    nivel: 1,
+    nombre: 'Moderada',
+    pm25_max: 35.4,
+    mensaje_general: 'Calidad del aire aceptable. Personas muy sensibles pueden experimentar molestias.',
+    mensaje_expuesto: 'Personas con enfermedades respiratorias deben reducir actividades prolongadas al aire libre.',
+    contexto: null,
+  },
+  {
+    nivel: 2,
+    nombre: 'Grupos sensibles',
+    pm25_max: 55.4,
+    mensaje_general: 'Nivel insalubre para grupos sensibles. Limiten el tiempo al aire libre.',
+    mensaje_expuesto: 'Niños, adultos mayores y personas con asma deben evitar actividades físicas intensas afuera.',
+    contexto: 'Considere usar mascarilla KN95 si necesita salir.',
+  },
+  {
+    nivel: 3,
+    nombre: 'Dañina',
+    pm25_max: Infinity,
+    mensaje_general: 'Calidad del aire crítica. Evite actividades físicas y use purificadores de aire.',
+    mensaje_expuesto: 'Toda la población debe minimizar exposición al aire exterior. Use mascarilla N95.',
+    contexto: 'Mantenga ventanas cerradas y use purificadores si dispone de ellos.',
+  },
+]
+
+function bandaDesPm25(pm25) {
+  return BANDAS.find((b) => pm25 <= b.pm25_max) ?? BANDAS[BANDAS.length - 1]
+}
+
 app.get('/api/recomendacion', async (req, res) => {
   try {
-    const params = new URLSearchParams(req.query).toString()
-    const url = `http://localhost:8000/api/recomendacion${params ? '?' + params : ''}`
-    const r = await fetch(url, { signal: AbortSignal.timeout(5000) })
-    const data = await r.json()
-    if (!r.ok) return res.status(r.status).json(data)
-    return res.json(data)
+    const url =
+      `${SUPABASE_URL}/rest/v1/lecturas_davis` +
+      `?select=hora_sensor_utc,pm2_5,aqi&order=hora_sensor_utc.desc&limit=2`
+    const rows = await supabaseFetch(url)
+
+    if (!rows?.length) {
+      return res.status(404).json({ error: 'Sin datos disponibles' })
+    }
+
+    const ultima = rows[0]
+    const pm25Actual = parseFloat(ultima.pm2_5) || 0
+    const banda = bandaDesPm25(pm25Actual)
+
+    let deltaPm25 = null
+    let iconoTendencia = '→'
+    if (rows.length >= 2) {
+      const pm25Anterior = parseFloat(rows[1].pm2_5) || 0
+      deltaPm25 = +(pm25Actual - pm25Anterior).toFixed(1)
+      iconoTendencia = deltaPm25 > 2 ? '↑' : deltaPm25 < -2 ? '↓' : '→'
+    }
+
+    return res.json({
+      nivel_alerta: banda.nivel,
+      banda_nombre: banda.nombre,
+      mensaje_general: banda.mensaje_general,
+      mensaje_expuesto: banda.mensaje_expuesto,
+      contexto_activo: banda.contexto,
+      delta_pm25: deltaPm25,
+      icono_tendencia: iconoTendencia,
+      pm25: pm25Actual,
+      timestamp: ultima.hora_sensor_utc,
+    })
   } catch (err) {
-    res.status(503).json({ error: 'Motor de recomendaciones no disponible', detail: err.message })
+    res.status(500).json({ error: 'Error generando recomendación', detail: err.message })
   }
 })
 
@@ -512,23 +484,19 @@ app.get('/api/davis', async (req, res) => {
     }
 
     if (type === 'history') {
-      const since = new Date(Date.now() - 3 * 60 * 60 * 1000)
-        .toISOString()
-        .replace('T', ' ')
-        .slice(0, 19)
       const url =
         `${SUPABASE_URL}/rest/v1/lecturas_davis` +
         `?select=hora_sensor_utc,aqi,pm2_5,pm10` +
-        `&order=hora_sensor_utc.asc` +
-        `&hora_sensor_utc=gte.${encodeURIComponent(since)}` +
-        `&limit=180`
+        `&order=hora_sensor_utc.desc` +
+        `&limit=36`
       const rows = await supabaseFetch(url)
-      return res.json(rows ?? [])
+      const sorted = (rows ?? []).reverse()
+      return res.json(sorted)
     }
 
     if (type === 'historico') {
-      const fromDate = req.query.from  // optional YYYY-MM-DD
-      const toDate   = req.query.to    // optional YYYY-MM-DD
+      const fromDate = req.query.from
+      const toDate   = req.query.to
 
       const allRows = []
       const batchSize = 1000
@@ -607,7 +575,7 @@ app.get('/api/davis', async (req, res) => {
         pm25: hourlyMap[h] ? +avg(hourlyMap[h].pm25).toFixed(1) : 0,
       }))
 
-      const allAqi = allRows.map(r => parseFloat(r.aqi) || 0)
+      const allAqi  = allRows.map(r => parseFloat(r.aqi) || 0)
       const allPm25 = allRows.map(r => parseFloat(r.pm2_5) || 0)
       const allPm10 = allRows.map(r => parseFloat(r.pm10) || 0)
 
@@ -616,18 +584,18 @@ app.get('/api/davis', async (req, res) => {
         monthly,
         hourly,
         distribution: {
-          good: pct(dist.good),
-          moderate: pct(dist.moderate),
-          usg: pct(dist.usg),
-          unhealthy: pct(dist.unhealthy),
+          good:         pct(dist.good),
+          moderate:     pct(dist.moderate),
+          usg:          pct(dist.usg),
+          unhealthy:    pct(dist.unhealthy),
           veryUnhealthy: pct(dist.veryUnhealthy),
         },
         overallAvg: {
-          aqi: +avg(allAqi).toFixed(1),
-          pm25: +avg(allPm25).toFixed(1),
-          pm10: +avg(allPm10).toFixed(1),
-          temp: +avg(allRows.map(r => parseFloat(r.temperatura) || 0)).toFixed(1),
-          hum: +avg(allRows.map(r => parseFloat(r.humedad) || 0)).toFixed(1),
+          aqi:    +avg(allAqi).toFixed(1),
+          pm25:   +avg(allPm25).toFixed(1),
+          pm10:   +avg(allPm10).toFixed(1),
+          temp:   +avg(allRows.map(r => parseFloat(r.temperatura) || 0)).toFixed(1),
+          hum:    +avg(allRows.map(r => parseFloat(r.humedad) || 0)).toFixed(1),
           maxPm25: allPm25.length ? +Math.max(...allPm25).toFixed(0) : 0,
           maxPm10: allPm10.length ? +Math.max(...allPm10).toFixed(0) : 0,
         },
@@ -635,9 +603,9 @@ app.get('/api/davis', async (req, res) => {
     }
 
     if (type === 'heatmap') {
-      const from  = req.query.from   // YYYY-MM-DD
-      const to    = req.query.to     // YYYY-MM-DD
-      const group = req.query.group ?? 'day'  // 'day' | 'month'
+      const from  = req.query.from
+      const to    = req.query.to
+      const group = req.query.group ?? 'day'
 
       if (!from || !to) return res.status(400).json({ error: 'from and to are required' })
 
@@ -713,6 +681,49 @@ app.get('/api/davis', async (req, res) => {
     console.error('API error:', err.message)
     res.status(500).json({ error: err.message })
   }
+})
+
+//  Predicción AQI +1 hora (Python) 
+app.get('/api/prediccion', async (req, res) => {
+  try {
+    const response = await fetch('http://127.0.0.1:5000/predecir', {
+      signal: AbortSignal.timeout(10000),
+    })
+    if (!response.ok) throw new Error(`Python API ${response.status}`)
+    const data = await response.json()
+    res.json(data)
+  } catch (err) {
+    console.error('Error prediccion:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+//  Datos del modelo: y_real vs y_predicho 
+function parsearCSV(ruta) {
+  const lineas  = readFileSync(ruta, 'utf8').trim().split('\n')
+  const headers = lineas[0].split(',').map(h => h.trim())
+  return lineas.slice(1).map(linea => {
+    const vals = linea.split(',')
+    const fila = {}
+    headers.forEach((h, i) => {
+      const raw = (vals[i] || '').trim()
+      fila[h]  = isNaN(raw) || raw === '' ? raw : parseFloat(raw)
+    })
+    return fila
+  })
+}
+
+
+app.get('/api/modelo', (req, res) => {
+  //const ruta = new URL('./static_data/predicciones_test.csv', import.meta.url).pathname
+  const ruta = join(__dirname, 'static_data', 'predicciones_test.csv')
+  console.log('Buscando CSV en:', ruta)
+  console.log('Existe:', existsSync(ruta))
+  if (!existsSync(ruta)) {
+    return res.status(404).json({ error: 'CSV no encontrado.' })
+  }
+  const datos = parsearCSV(ruta)
+  res.json(datos)
 })
 
 app.listen(PORT, () => console.log(`Backend corriendo en http://localhost:${PORT}`))

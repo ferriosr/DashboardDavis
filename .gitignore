@@ -26,3 +26,7 @@ npm-debug.log*
 # package
 
 .package-lock.json
+
+#recomendaciones
+test_escenarios.py
+test_resultados.json
