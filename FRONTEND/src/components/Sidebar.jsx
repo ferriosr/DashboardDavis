@@ -1,13 +1,12 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { Leaf, Bot, Video, BarChart2 } from 'lucide-react'
 
 const pages = [
-  { id: 'dashboard', label: 'Dashboard', icon: '🍃' },
-  {
-    id: 'modelo', label: 'Modelo', icon: '🤖',
-  },
-  {  id: 'camara', label: 'Cámara Isla', icon: '📹' },
-  {  id: 'historico', label: 'Dashboard Histórico', icon: '📊' }
+  { id: 'dashboard', label: 'Dashboard', Icon: Leaf },
+  { id: 'modelo',    label: 'Modelo',    Icon: Bot },
+  { id: 'camara',    label: 'Cámara Isla', Icon: Video },
+  { id: 'historico', label: 'Dashboard Histórico', Icon: BarChart2 },
 ]
 
 const EXPANDED_W  = 200
@@ -53,7 +52,7 @@ export default function Sidebar({ currentPage, onNavigate }) {
                     transition={{ type: 'spring', stiffness: 350, damping: 30 }}
                   />
                 )}
-                <span className="sidebar-item-icon">{p.icon}</span>
+                <span className="sidebar-item-icon"><p.Icon size={20} /></span>
                 <AnimatePresence>
                   {expanded && (
                     <motion.span
@@ -85,7 +84,7 @@ export default function Sidebar({ currentPage, onNavigate }) {
                         transition={{ type: 'spring', stiffness: 350, damping: 30 }}
                       />
                     )}
-                    <span className="sidebar-item-icon">{child.icon}</span>
+                    <span className="sidebar-item-icon"><child.Icon size={20} /></span>
                     <AnimatePresence>
                       {expanded && (
                         <motion.span

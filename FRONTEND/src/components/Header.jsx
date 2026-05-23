@@ -1,6 +1,7 @@
+import { Leaf, Radio, RefreshCw, Sun, Moon, Bell } from 'lucide-react'
+
 function formatTs(isoStr) {
   if (!isoStr) return '--'
-  // Normaliza "YYYY-MM-DD HH:MM:SS" → "YYYY-MM-DDTHH:MM:SSZ" para parseo correcto
   const iso = isoStr.replace(' ', 'T') + (isoStr.includes('+') || isoStr.endsWith('Z') ? '' : 'Z')
   const d = new Date(iso)
   if (isNaN(d.getTime())) return '--'
@@ -16,10 +17,10 @@ export default function Header({ lastTs, theme, onToggleTheme, onReload, reloadi
   return (
     <div className="header">
       <div className="header-brand">
-        <div className="header-icon">🍃</div>
+        <div className="header-icon"><Leaf size={28} /></div>
         <div>
           <div className="header-title">Estado del Ambiente</div>
-          <div className="header-subtitle">📡 Monitoreo en Tiempo Real</div>
+          <div className="header-subtitle"><Radio size={13} style={{ verticalAlign: 'middle', marginRight: 4 }} />Monitoreo en Tiempo Real</div>
         </div>
       </div>
 
@@ -30,7 +31,7 @@ export default function Header({ lastTs, theme, onToggleTheme, onReload, reloadi
           disabled={reloading}
           title="Recargar datos"
         >
-          <span className={`btn-icon${reloading ? ' spinning' : ''}`}>🔄</span>
+          <span className={`btn-icon${reloading ? ' spinning' : ''}`}><RefreshCw size={18} /></span>
         </button>
 
         <button
@@ -38,7 +39,7 @@ export default function Header({ lastTs, theme, onToggleTheme, onReload, reloadi
           onClick={onToggleTheme}
           title={theme === 'dark' ? 'Modo claro' : 'Modo oscuro'}
         >
-          <span className="btn-icon">{theme === 'dark' ? '☀️' : '🌙'}</span>
+          <span className="btn-icon">{theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}</span>
         </button>
 
         <button
@@ -46,7 +47,7 @@ export default function Header({ lastTs, theme, onToggleTheme, onReload, reloadi
           onClick={onOpenNotifications}
           title="Notificaciones"
         >
-          <span className="btn-icon">🔔</span>
+          <span className="btn-icon"><Bell size={18} /></span>
           {unreadCount > 0 && (
             <span className="notif-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>
           )}

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Chart, registerables } from 'chart.js'
+import { Bot, BarChart2, Brain, Info, Radio, TrendingUp, RefreshCw, Thermometer } from 'lucide-react'
 
 Chart.register(...registerables)
 
@@ -216,7 +217,7 @@ export default function Modelo({ theme }) {
 
       {/* ── Hero ── */}
       <div className="modelo-hero">
-        <div className="modelo-hero-icon">🤖</div>
+        <div className="modelo-hero-icon"><Bot size={52} /></div>
         <h1 className="modelo-title">Modelo Predictivo</h1>
         <p className="modelo-subtitle">
           Predicción de calidad del aire con XGBoost · Horizonte +1 hora
@@ -228,7 +229,7 @@ export default function Modelo({ theme }) {
 
         {/* Card AQI predicho */}
         <div className="modelo-card" style={{ flex: 2 }}>
-          <div className="modelo-card-icon">📊</div>
+          <div className="modelo-card-icon"><BarChart2 size={28} /></div>
           <div className="modelo-card-title">Predicción AQI +1 hora</div>
           <div className="modelo-card-desc">
             Estimación basada en las últimas 12 lecturas del sensor Davis AirLink
@@ -308,21 +309,21 @@ export default function Modelo({ theme }) {
 
         {/* Card info modelo */}
         <div className="modelo-card" style={{ flex: 1 }}>
-          <div className="modelo-card-icon">🧠</div>
+          <div className="modelo-card-icon"><Brain size={28} /></div>
           <div className="modelo-card-title">Sobre el modelo</div>
           <div className="modelo-card-desc">XGBoost entrenado con datos del sensor Davis AirLink.</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
             {[
-              ['📡', 'Lags temporales',    'Pasos 1, 2, 3, 6 y 12'],
-              ['📈', 'Promedios móviles',  'Ventanas 3, 6 y 12'],
-              ['🔄', 'Variables cíclicas', 'Hora, día, mes'],
-              ['🌡️', 'Sensores físicos',   'PM1, PM2.5, PM10, Temp, Hum'],
+              [<Radio size={16} />, 'Lags temporales',    'Pasos 1, 2, 3, 6 y 12'],
+              [<TrendingUp size={16} />, 'Promedios móviles',  'Ventanas 3, 6 y 12'],
+              [<RefreshCw size={16} />, 'Variables cíclicas', 'Hora, día, mes'],
+              [<Thermometer size={16} />, 'Sensores físicos',   'PM1, PM2.5, PM10, Temp, Hum'],
             ].map(([icon, title, desc]) => (
               <div key={title} style={{
                 display: 'flex', gap: 10, padding: '10px 12px',
                 background: 'var(--blue-light)', borderRadius: 10, alignItems: 'flex-start',
               }}>
-                <span style={{ fontSize: 16 }}>{icon}</span>
+                <span style={{ display: 'flex', alignItems: 'center' }}>{icon}</span>
                 <div>
                   <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-dark)' }}>{title}</div>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'DM Mono, monospace' }}>{desc}</div>
@@ -386,7 +387,7 @@ export default function Modelo({ theme }) {
 
       {/* ── Info footer ── */}
       <div className="modelo-info">
-        <span className="modelo-info-icon">ℹ️</span>
+        <span className="modelo-info-icon"><Info size={16} /></span>
         <span>
           El modelo se actualiza cada 5 minutos con las lecturas más recientes.
           MAE: 9.23 pts AQI · Error relativo: 8.7% · Sensor Davis AirLink.

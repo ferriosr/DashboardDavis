@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { Leaf, Wind, Cloud, Droplets, Thermometer } from 'lucide-react'
 import {
   aqiColor, aqiLabel, aqiActiveIndex, aqiScale,
   pm25Color, pm25Label, pm25ActiveIndex, pm25Scale,
@@ -11,7 +12,7 @@ function getInfo(type, data) {
   switch (type) {
     case 'aqi':
       return {
-        icon: '🍃', title: 'AQI', subtitle: 'Índice de Calidad del Aire', unit: '',
+        icon: <Leaf size={32} />, title: 'AQI', subtitle: 'Índice de Calidad del Aire', unit: '',
         desc: 'El AQI (Air Quality Index) es una escala numérica que indica qué tan limpio o contaminado está el aire. Combina las concentraciones de PM2.5, PM10, ozono, CO y otros contaminantes en un único valor comprensible.\nFuente: Estándares SEMARNAT 2019.',
         scale: aqiScale,
         value: Math.round(data.aqi),
@@ -21,7 +22,7 @@ function getInfo(type, data) {
       }
     case 'pm25':
       return {
-        icon: '🌫️', title: 'PM 2.5', subtitle: 'Partículas finas suspendidas', unit: 'µg/m³',
+        icon: <Wind size={32} />, title: 'PM 2.5', subtitle: 'Partículas finas suspendidas', unit: 'µg/m³',
         desc: 'Las PM2.5 son partículas con diámetro inferior a 2.5 micrómetros. Penetran profundamente en los pulmones y pueden pasar al torrente sanguíneo.\nFuente: Estándares SEMARNAT 2019.',
         scale: pm25Scale,
         value: data.pm25.toFixed(1),
@@ -31,7 +32,7 @@ function getInfo(type, data) {
       }
     case 'pm10':
       return {
-        icon: '☁️', title: 'PM 10', subtitle: 'Partículas gruesas suspendidas', unit: 'µg/m³',
+        icon: <Cloud size={32} />, title: 'PM 10', subtitle: 'Partículas gruesas suspendidas', unit: 'µg/m³',
         desc: 'Las PM10 incluyen partículas de entre 2.5 y 10 micrómetros. Afectan el sistema respiratorio superior.\nFuente: Estándares SEMARNAT 2019.',
         scale: pm10Scale,
         value: data.pm10.toFixed(1),
@@ -41,7 +42,7 @@ function getInfo(type, data) {
       }
     case 'humedad':
       return {
-        icon: '💧', title: 'Humedad', subtitle: 'Humedad relativa del aire', unit: '%',
+        icon: <Droplets size={32} />, title: 'Humedad', subtitle: 'Humedad relativa del aire', unit: '%',
         desc: 'La humedad relativa indica el porcentaje de vapor de agua presente en el aire. Niveles entre 40% y 60% son óptimos para el confort y la salud respiratoria.',
         scale: humScale,
         value: Math.round(data.humedad),
@@ -51,7 +52,7 @@ function getInfo(type, data) {
       }
     case 'temperatura':
       return {
-        icon: '🌡️', title: 'Temperatura', subtitle: 'Temperatura ambiente', unit: '°C',
+        icon: <Thermometer size={32} />, title: 'Temperatura', subtitle: 'Temperatura ambiente', unit: '°C',
         desc: 'La temperatura influye en el confort térmico y la calidad del aire. Entre 18°C y 24°C es óptima para la mayoría de las personas.\nFuente: NWS.',
         scale: tempScale,
         value: data.temperatura.toFixed(1),
@@ -87,7 +88,7 @@ export default function DetailModal({ type, data, onClose }) {
         <button className="modal-close" onClick={onClose}>✕</button>
 
         <div className="modal-header">
-          <div className="modal-icon">{info.icon}</div>
+          <div className="modal-icon" style={{ color: info.color }}>{info.icon}</div>
           <div>
             <div className="modal-title">{info.title}</div>
             <div className="modal-subtitle">{info.subtitle}</div>

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Chart, registerables } from 'chart.js'
 import HeatmapAQI from '../components/HeatmapAQI'
+import { TrendingUp, Calendar, Thermometer, AlertTriangle, Link, Radio, Wind } from 'lucide-react'
 
 Chart.register(...registerables)
 
@@ -153,6 +154,14 @@ export default function DashboardHistorico({ theme }) {
     setAppliedFrom(f)
     setAppliedTo(t)
     fetchStats(f, t)
+  }
+
+  function applyAll() {
+    setPendingFrom('')
+    setPendingTo('')
+    setAppliedFrom('')
+    setAppliedTo('')
+    fetchStats(null, null)
   }
 
   useEffect(() => {
@@ -323,27 +332,27 @@ export default function DashboardHistorico({ theme }) {
 
   const insights = [
     {
-      icon: '📈', title: 'Patrón horario de contaminación',
+      icon: <TrendingUp size={22} />, title: 'Patrón horario de contaminación',
       text: <>El AQI alcanza su máximo entre las <span style={{color:'#f07c3a',fontFamily:'DM Mono,monospace'}}>{peak.from}–{peak.to} h</span>. El mínimo ocurre alrededor de las <span style={{color:'#34c98c',fontFamily:'DM Mono,monospace'}}>{minHour.hour} h</span> (AQI {minHour.aqi.toFixed(1)}). Patrón derivado de los {total.toLocaleString()} registros históricos.</>,
     },
     {
-      icon: '📅', title: 'Estacionalidad marcada',
+      icon: <Calendar size={22} />, title: 'Estacionalidad marcada',
       text: <>El mes más limpio tiene AQI <span style={{color:'#34c98c',fontFamily:'DM Mono,monospace'}}>{Math.min(...hmBase).toFixed(1)}</span>. El mes más contaminado alcanza <span style={{color:'#e84b4b',fontFamily:'DM Mono,monospace'}}>{Math.max(...hmBase).toFixed(1)}</span>. Posible influencia de lluvias y quemas estacionales.</>,
     },
     {
-      icon: '🌡️', title: 'Relación clima–AQI',
+      icon: <Thermometer size={22} />, title: 'Relación clima–AQI',
       text: <>La correlación de temperatura con el AQI es <span style={{color:'#9b7ef8',fontFamily:'DM Mono,monospace'}}>r = {rTemp.toFixed(2)}</span> y de humedad <span style={{color:'#9b7ef8',fontFamily:'DM Mono,monospace'}}>r = {rHum.toFixed(2)}</span>. {rClimate < 0.3 ? 'La influencia meteorológica local es baja.' : 'Existe cierta influencia de las condiciones meteorológicas.'}</>,
     },
     {
-      icon: '⚠️', title: `${(100 - distribution.good).toFixed(0)}% del tiempo con riesgo`,
+      icon: <AlertTriangle size={22} />, title: `${(100 - distribution.good).toFixed(0)}% del tiempo con riesgo`,
       text: <>Solo el <span style={{color:'#34c98c',fontFamily:'DM Mono,monospace'}}>{distribution.good}%</span> del tiempo el aire es "Bueno". El <span style={{color:'#f07c3a',fontFamily:'DM Mono,monospace'}}>{riskPct}%</span> está en categorías que requieren acción para grupos sensibles o toda la población.</>,
     },
     {
-      icon: '🔗', title: 'Correlación PM con AQI',
+      icon: <Link size={22} />, title: 'Correlación PM con AQI',
       text: <>PM1 r={rPM1.toFixed(2)}, PM2.5 r={rPM25.toFixed(2)}, PM10 r={rPM10.toFixed(2)} con el AQI mensual. {rPMmin > 0.85 ? 'Alta correlación indica una fuente de emisión dominante.' : 'Las fracciones siguen tendencias parcialmente independientes.'}</>,
     },
     {
-      icon: '📡', title: 'Cobertura del dataset',
+      icon: <Radio size={22} />, title: 'Cobertura del dataset',
       text: <><span style={{color:'#2cc4b5',fontFamily:'DM Mono,monospace'}}>{total.toLocaleString()} registros</span> a intervalos de 15 minutos sobre {monthly.length} meses. Sin valores nulos en ninguna variable del sensor.</>,
     },
   ]
@@ -353,7 +362,7 @@ export default function DashboardHistorico({ theme }) {
 
       <div className="hist-header">
         <div className="hist-header-left">
-          <div className="hist-icon">🌬️</div>
+          <div className="hist-icon"><Wind size={28} /></div>
           <div>
             <div className="hist-title">Monitor de Calidad del Aire</div>
             <div className="hist-sub">Sensor Davis AirLink · histórico</div>
@@ -423,6 +432,25 @@ export default function DashboardHistorico({ theme }) {
               {label}
             </button>
           ))}
+          <button
+            onClick={applyAll}
+            style={{
+              background: 'transparent',
+              border: '1px solid var(--hist-border)',
+              borderRadius: 8,
+              color: 'var(--hist-text-muted)',
+              fontSize: 11,
+              fontWeight: 700,
+              padding: '5px 10px',
+              cursor: 'pointer',
+              fontFamily: 'DM Mono, monospace',
+              transition: 'border-color 0.2s, color 0.2s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = '#9b7ef8'; e.currentTarget.style.color = 'var(--hist-text)' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--hist-border)'; e.currentTarget.style.color = 'var(--hist-text-muted)' }}
+          >
+            todo
+          </button>
         </div>
 
         <button
@@ -443,7 +471,7 @@ export default function DashboardHistorico({ theme }) {
         </button>
 
         <span style={{ fontSize: 11, color: 'var(--hist-text-sub)', fontFamily: 'DM Mono, monospace' }}>
-          {appliedFrom} → {appliedTo}
+          {appliedFrom && appliedTo ? `${appliedFrom} → ${appliedTo}` : 'todos los registros'}
         </span>
       </div>
 

@@ -86,9 +86,6 @@ export function useAirQuality() {
         if (Array.isArray(rows) && rows.length > 0) {
           const h = rows.reduce(addToHist, emptyHist)
           setHistory(h)
-          const last = rows[rows.length - 1]
-          lastTsRef.current = last.hora_sensor_utc
-          setLastTs(last.hora_sensor_utc)
         }
       } catch (e) {
         console.warn('history error:', e)

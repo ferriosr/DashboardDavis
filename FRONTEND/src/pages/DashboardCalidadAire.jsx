@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Leaf, Droplets, Thermometer, Wind, Cloud, CigaretteOff, Users, Video } from 'lucide-react'
 import MetricCard from '../components/MetricCard'
 import RecCard from '../components/RecCard'
 import TrendChart from '../components/TrendChart'
@@ -21,19 +22,19 @@ export default function DashboardCalidadAire({ data, history, theme }) {
           title="AQI" subtitle="Calidad del Aire"
           value={Math.round(data.aqi)} unit=""
           color={aqiColor(data.aqi)} badge={aqiLabel(data.aqi)}
-          emoji="🍃" onClick={() => setModalType('aqi')}
+          icon={<Leaf size={44} />} onClick={() => setModalType('aqi')}
         />
         <MetricCard
           title="Humedad" subtitle="Humedad Relativa"
           value={Math.round(data.humedad)} unit="%"
           color={humColor(data.humedad)} badge={humLabel(data.humedad)}
-          emoji="💧" onClick={() => setModalType('humedad')}
+          icon={<Droplets size={44} />} onClick={() => setModalType('humedad')}
         />
         <MetricCard
           title="Temp." subtitle="Grados Celsius"
           value={data.temperatura.toFixed(1)} unit="°C"
           color={tempColor(data.temperatura)} badge={tempLabel(data.temperatura)}
-          emoji="🌡️" onClick={() => setModalType('temperatura')}
+          icon={<Thermometer size={44} />} onClick={() => setModalType('temperatura')}
         />
       </div>
 
@@ -44,13 +45,13 @@ export default function DashboardCalidadAire({ data, history, theme }) {
           title="PM 2.5" subtitle="Partículas Finas"
           value={data.pm25.toFixed(1)} unit=" µg/m³"
           color={pm25Color(data.pm25)} badge={pm25Label(data.pm25)}
-          emoji="🌫️" onClick={() => setModalType('pm25')}
+          icon={<Wind size={44} />} onClick={() => setModalType('pm25')}
         />
         <MetricCard
           title="PM 10" subtitle="Partículas Gruesas"
           value={data.pm10.toFixed(1)} unit=" µg/m³"
           color={pm10Color(data.pm10)} badge={pm10Label(data.pm10)}
-          emoji="☁️" onClick={() => setModalType('pm10')}
+          icon={<Cloud size={44} />} onClick={() => setModalType('pm10')}
         />
       </div>
 
@@ -62,7 +63,7 @@ export default function DashboardCalidadAire({ data, history, theme }) {
             <div className="card-value" style={{ color: 'var(--text-muted)' }}>--</div>
             <div className="card-badge badge-muted">En proceso de conexión</div>
           </div>
-          <div className="card-emoji">🚭</div>
+          <div className="card-emoji"><CigaretteOff size={44} /></div>
         </div>
         <div className="card card-muted">
           <div className="card-content">
@@ -73,7 +74,7 @@ export default function DashboardCalidadAire({ data, history, theme }) {
             </div>
             <div className="card-badge badge-muted">En proceso de conexión</div>
           </div>
-          <div className="card-emoji">👥</div>
+          <div className="card-emoji"><Users size={44} /></div>
         </div>
       </div>
 
@@ -84,7 +85,7 @@ export default function DashboardCalidadAire({ data, history, theme }) {
             <div className="card-title">Isla de Datos Urbanos</div>
             <div className="card-subtitle">Cámara de Monitoreo</div>
             <div className="video-placeholder">
-              <div className="video-placeholder-icon">📹</div>
+              <div className="video-placeholder-icon"><Video size={44} /></div>
               <div className="video-placeholder-text">Próximamente</div>
               <div className="video-placeholder-sub">La transmisión en vivo estará disponible en una actualización futura</div>
             </div>

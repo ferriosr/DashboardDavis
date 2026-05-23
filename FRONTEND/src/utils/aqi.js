@@ -182,7 +182,7 @@ export function generateNotifications(data, prevLevels) {
     notifications.push({
       id: `aqi-${Date.now()}`,
       type: newLevels.aqi >= 3 ? 'danger' : 'warning',
-      icon: '🍃',
+      icon: 'leaf',
       title: 'Calidad del Aire',
       message: `AQI ${Math.round(data.aqi)} · ${aqiLabel(data.aqi)}`,
       time: now,
@@ -194,7 +194,7 @@ export function generateNotifications(data, prevLevels) {
     notifications.push({
       id: `pm25-${Date.now() + 1}`,
       type: 'warning',
-      icon: '🌫️',
+      icon: 'wind',
       title: 'PM 2.5 Elevado',
       message: `${data.pm25.toFixed(1)} µg/m³ · ${pm25Label(data.pm25)}`,
       time: now,
@@ -206,7 +206,7 @@ export function generateNotifications(data, prevLevels) {
     notifications.push({
       id: `pm10-${Date.now() + 2}`,
       type: 'warning',
-      icon: '☁️',
+      icon: 'cloud',
       title: 'PM 10 Elevado',
       message: `${data.pm10.toFixed(1)} µg/m³ · ${pm10Label(data.pm10)}`,
       time: now,

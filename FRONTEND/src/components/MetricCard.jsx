@@ -1,4 +1,4 @@
-export default function MetricCard({ title, subtitle, value, unit, color, badge, emoji, onClick }) {
+export default function MetricCard({ title, subtitle, value, unit, color, badge, icon, onClick }) {
   return (
     <div className="card" onClick={onClick}>
       <div className="card-content">
@@ -19,7 +19,7 @@ export default function MetricCard({ title, subtitle, value, unit, color, badge,
           {badge}
         </div>
       </div>
-      <div className="card-emoji">{emoji}</div>
+      <div className="card-emoji">{icon}</div>
     </div>
   )
 }

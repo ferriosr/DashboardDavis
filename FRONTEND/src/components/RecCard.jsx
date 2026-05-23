@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Megaphone, Lightbulb } from 'lucide-react'
 import { fetchRecomendacion, fetchPrediccion } from '../api/davis'
 
 const POLL_MS = 30_000
@@ -118,7 +119,7 @@ export default function RecCard({ aqi }) {
 
     return (
       <div className="rec-card" style={{ background: bg, borderColor: `${color}33` }}>
-        <div className="rec-icon">📢</div>
+        <div className="rec-icon"><Megaphone size={22} /></div>
         <div className="rec-body">
           <div className="rec-label" style={{ color }}>
             Recomendación · {rec.banda_nombre}
@@ -143,11 +144,11 @@ export default function RecCard({ aqi }) {
 
   // ── Fallback usando AQI actual + predicción ──────────────────
   const { msg } = fallbackFromAqi(aqiActual)
-  const icon = nivelEfectivo === 0 ? '💡' : '📢'
+  const RecIcon = nivelEfectivo === 0 ? Lightbulb : Megaphone
 
   return (
     <div className="rec-card" style={{ background: bg, borderColor: `${color}33` }}>
-      <div className="rec-icon">{icon}</div>
+      <div className="rec-icon"><RecIcon size={22} /></div>
       <div className="rec-body">
         <div className="rec-label" style={{ color }}>Recomendación</div>
         <div className="rec-text">{msg}</div>
