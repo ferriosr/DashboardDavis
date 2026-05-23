@@ -6,7 +6,7 @@ Simula 5 escenarios con datos del sensor Davis + camara (humo y personas).
 Ejecutar desde la carpeta recomendations/:
     python test_escenarios.py
 
-Requiere modelo en ../BACKEND/modelo_humo_escom.json
+Requiere modelo en ../modelo_humo_escom.json
 """
 
 import sys
@@ -19,10 +19,9 @@ from datetime import datetime, timedelta
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
 # -- Rutas ------------------------------------------------------------------
-ROOT    = Path(__file__).resolve().parent
-BACKEND = ROOT.parent / "BACKEND"
-MODELO  = str(BACKEND / "modelo_humo_escom.json")
-META    = str(BACKEND / "metadata_humo.json")
+ROOT   = Path(__file__).resolve().parent
+MODELO = str(ROOT.parent / "modelo_humo_escom.json")
+META   = str(ROOT.parent / "metadata_humo.json")
 
 sys.path.insert(0, str(ROOT))
 
