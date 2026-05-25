@@ -28,3 +28,12 @@ npm-debug.log*
 .package-lock.json
 
 .venv
+
+# Recomendaciones
+frontend/recomendations/test_escenarios.py
+frontend/recomendations/test_resultados.json
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo

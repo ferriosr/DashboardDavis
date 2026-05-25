@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Chart, registerables } from 'chart.js'
 import HeatmapAQI from '../components/HeatmapAQI'
+import { TrendingUp, Calendar, Thermometer, AlertTriangle, Link, Radio, Wind } from 'lucide-react'
 
 Chart.register(...registerables)
 
@@ -31,9 +32,27 @@ function pearson(xs, ys) {
 function aqiCategory(v) {
   if (v <= 50)  return 'Bueno'
   if (v <= 100) return 'Moderado'
-  if (v <= 150) return 'No saludable para grupos sensibles'
-  if (v <= 200) return 'No saludable'
-  if (v <= 300) return 'Muy no saludable'
+  if (v <= 150) return 'Insalubre para grupos sensibles'
+  if (v <= 200) return 'Insalubre'
+  if (v <= 300) return 'Muy insalubre'
+  return 'Peligroso'
+}
+
+function pm25Category(v) {
+  if (v <= 12)  return 'Bueno'
+  if (v <= 35)  return 'Moderado'
+  if (v <= 55)  return 'Insalubre (grupos sensibles)'
+  if (v <= 150) return 'Insalubre'
+  if (v <= 250) return 'Muy insalubre'
+  return 'Peligroso'
+}
+
+function pm10Category(v) {
+  if (v <= 54)  return 'Bueno'
+  if (v <= 154) return 'Moderado'
+  if (v <= 254) return 'Insalubre (grupos sensibles)'
+  if (v <= 354) return 'Insalubre'
+  if (v <= 424) return 'Muy insalubre'
   return 'Peligroso'
 }
 
@@ -114,10 +133,10 @@ export default function DashboardHistorico({ theme }) {
 
   // period state — shared across all charts
   const today = todayStr()
-  const [pendingFrom, setPendingFrom] = useState(daysAgoStr(30))
-  const [pendingTo,   setPendingTo]   = useState(today)
-  const [appliedFrom, setAppliedFrom] = useState(daysAgoStr(30))
-  const [appliedTo,   setAppliedTo]   = useState(today)
+  const [pendingFrom, setPendingFrom] = useState('')
+  const [pendingTo,   setPendingTo]   = useState('')
+  const [appliedFrom, setAppliedFrom] = useState('')
+  const [appliedTo,   setAppliedTo]   = useState('')
 
   const monthlyAQIRef = useRef(null)
   const hourlyRef     = useRef(null)
@@ -153,6 +172,14 @@ export default function DashboardHistorico({ theme }) {
     setAppliedFrom(f)
     setAppliedTo(t)
     fetchStats(f, t)
+  }
+
+  function applyAll() {
+    setPendingFrom('')
+    setPendingTo('')
+    setAppliedFrom('')
+    setAppliedTo('')
+    fetchStats(null, null)
   }
 
   useEffect(() => {
@@ -311,39 +338,40 @@ export default function DashboardHistorico({ theme }) {
 
   const peak    = peakHours(hourly)
   const minHour = hourly.reduce((a, b) => b.aqi < a.aqi ? b : a, hourly[0] ?? { hour: 0, aqi: 0 })
-  const riskPct = (+distribution.usg + +distribution.unhealthy + +distribution.veryUnhealthy).toFixed(1)
+  const riskPct = (+distribution.usg + +distribution.unhealthy + +distribution.veryUnhealthy + +(distribution.hazardous ?? 0)).toFixed(1)
 
   const distRows = [
-    { label: 'Bueno · 0–50',            pct: distribution.good,         color: '#34c98c' },
-    { label: 'Moderado · 51–100',        pct: distribution.moderate,     color: '#f5c842' },
-    { label: 'No saludable GS · 101–150',pct: distribution.usg,          color: '#f07c3a' },
-    { label: 'No saludable · 151–200',   pct: distribution.unhealthy,    color: '#e84b4b' },
-    { label: 'Muy no saludable · 201+',  pct: distribution.veryUnhealthy,color: '#9b7ef8' },
+    { label: 'Bueno',                          range: '0 – 50',    pct: distribution.good,                    color: '#00E676' },
+    { label: 'Moderado',                        range: '51 – 100',  pct: distribution.moderate,                color: '#F6D72B' },
+    { label: 'Insalubre (grupos sensibles)',     range: '101 – 150', pct: distribution.usg,                    color: '#FF9800' },
+    { label: 'Insalubre',                        range: '151 – 200', pct: distribution.unhealthy,              color: '#FF5252' },
+    { label: 'Muy insalubre',                    range: '201 – 300', pct: distribution.veryUnhealthy,          color: '#9C27B0' },
+    { label: 'Peligroso',                        range: '301+',      pct: distribution.hazardous ?? 0,         color: '#7E0023' },
   ]
 
   const insights = [
     {
-      icon: '📈', title: 'Patrón horario de contaminación',
+      icon: <TrendingUp size={22} />, title: 'Patrón horario de contaminación',
       text: <>El AQI alcanza su máximo entre las <span style={{color:'#f07c3a',fontFamily:'DM Mono,monospace'}}>{peak.from}–{peak.to} h</span>. El mínimo ocurre alrededor de las <span style={{color:'#34c98c',fontFamily:'DM Mono,monospace'}}>{minHour.hour} h</span> (AQI {minHour.aqi.toFixed(1)}). Patrón derivado de los {total.toLocaleString()} registros históricos.</>,
     },
     {
-      icon: '📅', title: 'Estacionalidad marcada',
+      icon: <Calendar size={22} />, title: 'Estacionalidad marcada',
       text: <>El mes más limpio tiene AQI <span style={{color:'#34c98c',fontFamily:'DM Mono,monospace'}}>{Math.min(...hmBase).toFixed(1)}</span>. El mes más contaminado alcanza <span style={{color:'#e84b4b',fontFamily:'DM Mono,monospace'}}>{Math.max(...hmBase).toFixed(1)}</span>. Posible influencia de lluvias y quemas estacionales.</>,
     },
     {
-      icon: '🌡️', title: 'Relación clima–AQI',
+      icon: <Thermometer size={22} />, title: 'Relación clima–AQI',
       text: <>La correlación de temperatura con el AQI es <span style={{color:'#9b7ef8',fontFamily:'DM Mono,monospace'}}>r = {rTemp.toFixed(2)}</span> y de humedad <span style={{color:'#9b7ef8',fontFamily:'DM Mono,monospace'}}>r = {rHum.toFixed(2)}</span>. {rClimate < 0.3 ? 'La influencia meteorológica local es baja.' : 'Existe cierta influencia de las condiciones meteorológicas.'}</>,
     },
     {
-      icon: '⚠️', title: `${(100 - distribution.good).toFixed(0)}% del tiempo con riesgo`,
+      icon: <AlertTriangle size={22} />, title: `${(100 - distribution.good).toFixed(0)}% del tiempo con riesgo`,
       text: <>Solo el <span style={{color:'#34c98c',fontFamily:'DM Mono,monospace'}}>{distribution.good}%</span> del tiempo el aire es "Bueno". El <span style={{color:'#f07c3a',fontFamily:'DM Mono,monospace'}}>{riskPct}%</span> está en categorías que requieren acción para grupos sensibles o toda la población.</>,
     },
     {
-      icon: '🔗', title: 'Correlación PM con AQI',
+      icon: <Link size={22} />, title: 'Correlación PM con AQI',
       text: <>PM1 r={rPM1.toFixed(2)}, PM2.5 r={rPM25.toFixed(2)}, PM10 r={rPM10.toFixed(2)} con el AQI mensual. {rPMmin > 0.85 ? 'Alta correlación indica una fuente de emisión dominante.' : 'Las fracciones siguen tendencias parcialmente independientes.'}</>,
     },
     {
-      icon: '📡', title: 'Cobertura del dataset',
+      icon: <Radio size={22} />, title: 'Cobertura del dataset',
       text: <><span style={{color:'#2cc4b5',fontFamily:'DM Mono,monospace'}}>{total.toLocaleString()} registros</span> a intervalos de 15 minutos sobre {monthly.length} meses. Sin valores nulos en ninguna variable del sensor.</>,
     },
   ]
@@ -353,7 +381,7 @@ export default function DashboardHistorico({ theme }) {
 
       <div className="hist-header">
         <div className="hist-header-left">
-          <div className="hist-icon">🌬️</div>
+          <div className="hist-icon"><Wind size={28} /></div>
           <div>
             <div className="hist-title">Monitor de Calidad del Aire</div>
             <div className="hist-sub">Sensor Davis AirLink · histórico</div>
@@ -423,6 +451,25 @@ export default function DashboardHistorico({ theme }) {
               {label}
             </button>
           ))}
+          <button
+            onClick={applyAll}
+            style={{
+              background: 'transparent',
+              border: '1px solid var(--hist-border)',
+              borderRadius: 8,
+              color: 'var(--hist-text-muted)',
+              fontSize: 11,
+              fontWeight: 700,
+              padding: '5px 10px',
+              cursor: 'pointer',
+              fontFamily: 'DM Mono, monospace',
+              transition: 'border-color 0.2s, color 0.2s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = '#9b7ef8'; e.currentTarget.style.color = 'var(--hist-text)' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--hist-border)'; e.currentTarget.style.color = 'var(--hist-text-muted)' }}
+          >
+            todo
+          </button>
         </div>
 
         <button
@@ -443,7 +490,7 @@ export default function DashboardHistorico({ theme }) {
         </button>
 
         <span style={{ fontSize: 11, color: 'var(--hist-text-sub)', fontFamily: 'DM Mono, monospace' }}>
-          {appliedFrom} → {appliedTo}
+          {appliedFrom && appliedTo ? `${appliedFrom} → ${appliedTo}` : 'todos los registros'}
         </span>
       </div>
 
@@ -459,12 +506,12 @@ export default function DashboardHistorico({ theme }) {
           <div className="hist-metric-card" style={{ '--hist-accent': '#e84b4b' }}>
             <div className="hist-metric-label">PM2.5 Promedio</div>
             <div className="hist-metric-value">{overallAvg.pm25}<span>µg/m³</span></div>
-            <div className="hist-metric-sub">Máx registrado: {overallAvg.maxPm25} µg/m³</div>
+            <div className="hist-metric-sub">Nivel: {pm25Category(overallAvg.pm25)}</div>
           </div>
           <div className="hist-metric-card" style={{ '--hist-accent': '#9b7ef8' }}>
             <div className="hist-metric-label">PM10 Promedio</div>
             <div className="hist-metric-value">{overallAvg.pm10}<span>µg/m³</span></div>
-            <div className="hist-metric-sub">Máx registrado: {overallAvg.maxPm10} µg/m³</div>
+            <div className="hist-metric-sub">Nivel: {pm10Category(overallAvg.pm10)}</div>
           </div>
           <div className="hist-metric-card" style={{ '--hist-accent': '#2cc4b5' }}>
             <div className="hist-metric-label">Temperatura Promedio</div>
@@ -480,9 +527,9 @@ export default function DashboardHistorico({ theme }) {
             <div className="hist-chart-title">Distribución por categoría AQI</div>
             <div className="hist-chart-sub">Porcentaje del tiempo total en cada banda</div>
             <div style={{ marginTop: 8 }}>
-              {distRows.map(({ label, pct, color }) => (
+              {distRows.map(({ label, range, pct, color }) => (
                 <div key={label} className="hist-dist-row">
-                  <div className="hist-dist-label">{label}</div>
+                  <div className="hist-dist-label">{label} <span style={{ color: '#888', fontSize: '0.8em' }}>{range}</span></div>
                   <div className="hist-dist-track">
                     <div className="hist-dist-fill" style={{ width: `${Math.max(pct, 0.5)}%`, background: color }}>
                       {pct}
@@ -494,7 +541,7 @@ export default function DashboardHistorico({ theme }) {
             </div>
             <div style={{ marginTop: 20 }}>
               <div className="hist-aqi-scale">
-                {[['#34c98c',50],['#f5c842',50],['#f07c3a',50],['#e84b4b',50],['#9b7ef8',100],['#7a1919',200]].map(([bg, flex]) => (
+                {[['#00E676',50],['#F6D72B',50],['#FF9800',50],['#FF5252',50],['#9C27B0',100],['#7E0023',200]].map(([bg, flex]) => (
                   <div key={bg} style={{ flex, background: bg }} />
                 ))}
               </div>

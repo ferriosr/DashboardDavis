@@ -1,7 +1,7 @@
 export const aqiScale = [
   { label: 'Bueno', range: '0 – 50', color: '#00E676' },
   { label: 'Moderado', range: '51 – 100', color: '#F6D72B' },
-  { label: 'Insalubre (sensibles)', range: '101 – 150', color: '#FF9800' },
+  { label: 'Insalubre (grupos sensibles)', range: '101 – 150', color: '#FF9800' },
   { label: 'Insalubre', range: '151 – 200', color: '#FF5252' },
   { label: 'Muy insalubre', range: '201 – 300', color: '#9C27B0' },
   { label: 'Peligroso', range: '301+', color: '#7E0023' },
@@ -34,11 +34,11 @@ export const humScale = [
 ]
 
 export const tempScale = [
-  { label: 'Seguro', range: '< 26°C', color: '#2D62ED' },
-  { label: 'Precaución', range: '27 – 32°C', color: '#00BCD4' },
-  { label: 'Precaución Extrema', range: '33 – 40°C', color: '#00E676' },
-  { label: 'Peligro', range: '41 – 51°C', color: '#FF9800' },
-  { label: 'Muy caliente', range: '52 – 92°C', color: '#FF5252' },
+  { label: 'Muy frío', range: '< 10°C', color: '#2D62ED' },
+  { label: 'Fresco', range: '10 – 17°C', color: '#00BCD4' },
+  { label: 'Confortable', range: '18 – 24°C', color: '#00E676' },
+  { label: 'Cálido', range: '25 – 32°C', color: '#FF9800' },
+  { label: 'Muy caliente', range: '> 32°C', color: '#FF5252' },
 ]
 
 export function aqiColor(v) {
@@ -182,7 +182,7 @@ export function generateNotifications(data, prevLevels) {
     notifications.push({
       id: `aqi-${Date.now()}`,
       type: newLevels.aqi >= 3 ? 'danger' : 'warning',
-      icon: '🍃',
+      icon: 'leaf',
       title: 'Calidad del Aire',
       message: `AQI ${Math.round(data.aqi)} · ${aqiLabel(data.aqi)}`,
       time: now,
@@ -194,7 +194,7 @@ export function generateNotifications(data, prevLevels) {
     notifications.push({
       id: `pm25-${Date.now() + 1}`,
       type: 'warning',
-      icon: '🌫️',
+      icon: 'wind',
       title: 'PM 2.5 Elevado',
       message: `${data.pm25.toFixed(1)} µg/m³ · ${pm25Label(data.pm25)}`,
       time: now,
@@ -206,7 +206,7 @@ export function generateNotifications(data, prevLevels) {
     notifications.push({
       id: `pm10-${Date.now() + 2}`,
       type: 'warning',
-      icon: '☁️',
+      icon: 'cloud',
       title: 'PM 10 Elevado',
       message: `${data.pm10.toFixed(1)} µg/m³ · ${pm10Label(data.pm10)}`,
       time: now,

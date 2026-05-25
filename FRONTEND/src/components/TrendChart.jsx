@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { Chart, registerables } from 'chart.js'
+import { TrendingUp } from 'lucide-react'
 
 Chart.register(...registerables)
 
@@ -106,7 +107,7 @@ export default function TrendChart({ history, theme }) {
   return (
     <div className="chart-section">
       <div className="chart-header">
-        <div className="chart-title">📈 Tendencia · Últimas mediciones</div>
+        <div className="chart-title"><TrendingUp size={16} style={{ verticalAlign: 'middle', marginRight: 6 }} />Tendencia · Últimas mediciones</div>
         <div className="chart-legend">
           <div className="legend-item">
             <div className="legend-dot" style={{ background: '#2D62ED' }} />

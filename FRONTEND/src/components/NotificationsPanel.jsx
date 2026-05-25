@@ -1,4 +1,11 @@
 import { useEffect } from 'react'
+import { Bell, Leaf, Wind, Cloud, CheckCircle } from 'lucide-react'
+
+const ICON_MAP = {
+  leaf:  <Leaf  size={18} />,
+  wind:  <Wind  size={18} />,
+  cloud: <Cloud size={18} />,
+}
 
 function timeAgo(date) {
   const diff = Math.floor((Date.now() - date.getTime()) / 1000)
@@ -25,7 +32,10 @@ export default function NotificationsPanel({ notifications, onClose, onMarkRead,
       <div className="notif-panel">
         <div className="notif-panel-header">
           <div>
-            <div className="notif-panel-title">🔔 Notificaciones</div>
+            <div className="notif-panel-title">
+              <Bell size={16} style={{ verticalAlign: 'middle', marginRight: 6 }} />
+              Notificaciones
+            </div>
             {unread > 0 && (
               <div className="notif-unread-count">{unread} sin leer</div>
             )}
@@ -50,14 +60,14 @@ export default function NotificationsPanel({ notifications, onClose, onMarkRead,
         <div className="notif-list">
           {notifications.length === 0 ? (
             <div className="notif-empty">
-              <div className="notif-empty-icon">✅</div>
+              <div className="notif-empty-icon"><CheckCircle size={36} /></div>
               <div className="notif-empty-title">Todo en orden</div>
               <div className="notif-empty-sub">No hay alertas activas</div>
             </div>
           ) : (
             notifications.map((n) => (
               <div key={n.id} className={`notif-item ${n.type}${n.read ? ' read' : ''}`}>
-                <div className="notif-item-icon">{n.icon}</div>
+                <div className="notif-item-icon">{ICON_MAP[n.icon] ?? <Bell size={18} />}</div>
                 <div className="notif-item-content">
                   <div className="notif-item-title">{n.title}</div>
                   <div className="notif-item-msg">{n.message}</div>

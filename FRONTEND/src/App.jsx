@@ -8,6 +8,7 @@ import Modelo from './pages/Modelo'
 import DashboardCalidadAire from './pages/DashboardCalidadAire'
 import CamaraIsla from './components/CamaraIsla'
 
+
 export default function App() {
   const [theme, setTheme] = useState(() => {
     const saved = localStorage.getItem('theme') || 'light'
@@ -62,7 +63,7 @@ export default function App() {
         onOpenNotifications={handleBellClick}
       />
 
-      {currentPage === 'modelo' && <Modelo />}
+      {currentPage === 'modelo' && <Modelo theme={theme} />}
 
       {currentPage === 'camara' && <CamaraIsla />}
 

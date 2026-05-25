@@ -1,19 +1,27 @@
 import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
-import path from 'path'
-import { spawn } from 'child_process'
+import { readFileSync, existsSync, writeFileSync } from 'fs'
+import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
-import { writeFileSync } from 'fs'
+import { spawn } from 'child_process'
 
 const app = express()
 const PORT = process.env.PORT || 3001
 
 const SUPABASE_URL = process.env.SUPABASE_URL
 const SUPABASE_KEY = process.env.SUPABASE_KEY
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY
+const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent'
+const GEMINI_AQI_DELTA = 10              // puntos de AQI para considerar cambio significativo
+// Cache basado en datos de Supabase — se ignora contexto escolar (siempre cambia)
+let geminiCache = { data: null, lastDataTimestamp: null, lastAqi: null, lastBand: null }
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const PREDICT_SCRIPT = path.join(__dirname, 'predict_model.py')
+const heatmapCache = new Map()
+const HEATMAP_CACHE_TTL = 5 * 60 * 1000 // 5 minutos
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const PREDICT_SCRIPT = join(__dirname, 'predict_model.py')
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
   console.error('ERROR: Faltan SUPABASE_URL o SUPABASE_KEY en .env')
@@ -39,6 +47,21 @@ async function supabaseFetch(path) {
   })
   if (!res.ok) throw new Error(`Supabase ${res.status}`)
   return res.json()
+}
+
+async function supabaseCount(path) {
+  const res = await fetch(path + '&limit=1', {
+    headers: {
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${SUPABASE_KEY}`,
+      Accept: 'application/json',
+      Prefer: 'count=exact',
+    },
+    signal: AbortSignal.timeout(10000),
+  })
+  if (!res.ok) throw new Error(`Supabase count ${res.status}`)
+  const range = res.headers.get('content-range') // e.g. "0-0/42318"
+  return parseInt(range?.split('/')[1] ?? '0', 10)
 }
 
 function runPythonPrediction(features) {
@@ -98,7 +121,7 @@ function average(values) {
 
 function randomBetween(min, max) {
   return min + Math.random() * (max - min)
-}
+} 
 
 app.get('/api/modelo/simulacion', async (req, res) => {
   try {
@@ -195,99 +218,6 @@ app.get('/api/modelo/simulacion', async (req, res) => {
   }
 })
 
-app.get('/api/modelo', async (req, res) => {
-  try {
-    const url =
-      `${SUPABASE_URL}/rest/v1/lecturas_davis` +
-      `?select=hora_sensor_utc,pm2_5,pm10,temperatura,humedad,aqi,pm1` +
-      `&order=hora_sensor_utc.desc&limit=50`
-
-    const rows = await supabaseFetch(url)
-    if (!rows?.length) {
-      return res.status(404).json({ error: 'No se encontraron datos de Davis' })
-    }
-
-    const bucketsMap = new Map()
-    for (const row of rows) {
-      const dt = new Date(row.hora_sensor_utc.replace(' ', 'T') + 'Z')
-      if (Number.isNaN(dt.getTime())) continue
-
-      const key = floorTo15(dt).toISOString()
-      const bucket = bucketsMap.get(key) ?? {
-        date: new Date(key),
-        pm25: [],
-        pm10: [],
-        temp: [],
-        hum: [],
-        aqi: [],
-        pm1: [],
-      }
-
-      bucket.pm25.push(parseFloat(row.pm2_5) || 0)
-      bucket.pm10.push(parseFloat(row.pm10) || 0)
-      bucket.temp.push(parseFloat(row.temperatura) || 0)
-      bucket.hum.push(parseFloat(row.humedad) || 0)
-      bucket.aqi.push(parseFloat(row.aqi) || 0)
-      bucket.pm1.push(parseFloat(row.pm1) || 0)
-      bucketsMap.set(key, bucket)
-    }
-
-    const buckets = Array.from(bucketsMap.values()).sort((a, b) => b.date - a.date)
-    if (buckets.length < 4) {
-      return res.status(400).json({ error: 'Se requieren al menos 4 bloques de 15 minutos para generar la predicción' })
-    }
-
-    const [actual, h1, h2, h3] = buckets
-    const recentBlocks = [actual, h1, h2, h3].map((block) => ({
-      date: block.date.toISOString(),
-      pm25: +average(block.pm25).toFixed(2),
-      pm10: +average(block.pm10).toFixed(2),
-    }))
-
-    const recentPm25 = [
-      average(actual.pm25),
-      average(h1.pm25),
-      average(h2.pm25),
-      average(h3.pm25),
-    ]
-    const rollingMean = average(recentPm25)
-    const rollingStd = Math.sqrt(
-      average(recentPm25.map((value) => Math.pow(value - rollingMean, 2)))
-    )
-
-    const features = {
-      temp: average(actual.temp),
-      hum: average(actual.hum),
-      pm10: average(actual.pm10),
-      aqi: average(actual.aqi),
-      pm1: average(actual.pm1),
-      pm25_lag_1: average(actual.pm25),
-      pm10_lag_1: average(actual.pm10),
-      pm25_lag_2: average(h1.pm25),
-      pm10_lag_2: average(h1.pm10),
-      pm25_lag_3: average(h2.pm25),
-      pm10_lag_3: average(h2.pm10),
-      diff_pm25: average(actual.pm25) - average(h1.pm25),
-      rolling_mean_pm25: rollingMean,
-      rolling_std_pm25: rollingStd,
-      hour: actual.date.getUTCHours(),
-      day_of_week: actual.date.getUTCDay(),
-      time_gap: 15.0,
-    }
-
-    const pythonResult = await runPythonPrediction(features)
-    return res.json({
-      modelName: pythonResult.modelName,
-      prediction: +pythonResult.prediction.toFixed(2),
-      threshold: pythonResult.threshold,
-      features,
-      recentBlocks,
-    })
-  } catch (err) {
-    console.error('Modelo error:', err.message)
-    res.status(500).json({ error: err.message })
-  }
-})
 
 app.get('/api/modelo/validacion', async (req, res) => {
   try {
@@ -411,7 +341,7 @@ app.post('/api/video/stream', async (req, res) => {
 
     const timestamp = Date.now()
     const filename = `video_${timestamp}.mp4`
-    const filepath = path.join(__dirname, 'uploads', filename)
+    const filepath = join(__dirname, 'uploads', filename)
 
     try {
       writeFileSync(filepath, videoData)
@@ -488,6 +418,84 @@ app.get('/api/video/status', async (req, res) => {
   }
 })
 
+const BANDAS = [
+  {
+    nivel: 0,
+    nombre: 'Buena',
+    pm25_max: 12,
+    mensaje_general: 'Calidad del aire excelente. El ambiente es seguro para todas las personas.',
+    mensaje_expuesto: null,
+    contexto: null,
+  },
+  {
+    nivel: 1,
+    nombre: 'Moderada',
+    pm25_max: 35.4,
+    mensaje_general: 'Calidad del aire aceptable. Personas muy sensibles pueden experimentar molestias.',
+    mensaje_expuesto: 'Personas con enfermedades respiratorias deben reducir actividades prolongadas al aire libre.',
+    contexto: null,
+  },
+  {
+    nivel: 2,
+    nombre: 'Grupos sensibles',
+    pm25_max: 55.4,
+    mensaje_general: 'Nivel insalubre para grupos sensibles. Limiten el tiempo al aire libre.',
+    mensaje_expuesto: 'Niños, adultos mayores y personas con asma deben evitar actividades físicas intensas afuera.',
+    contexto: 'Considere usar mascarilla KN95 si necesita salir.',
+  },
+  {
+    nivel: 3,
+    nombre: 'Dañina',
+    pm25_max: Infinity,
+    mensaje_general: 'Calidad del aire crítica. Evite actividades físicas y use purificadores de aire.',
+    mensaje_expuesto: 'Toda la población debe minimizar exposición al aire exterior. Use mascarilla N95.',
+    contexto: 'Mantenga ventanas cerradas y use purificadores si dispone de ellos.',
+  },
+]
+
+function bandaDesPm25(pm25) {
+  return BANDAS.find((b) => pm25 <= b.pm25_max) ?? BANDAS[BANDAS.length - 1]
+}
+
+app.get('/api/recomendacion', async (req, res) => {
+  try {
+    const url =
+      `${SUPABASE_URL}/rest/v1/lecturas_davis` +
+      `?select=hora_sensor_utc,pm2_5,aqi&order=hora_sensor_utc.desc&limit=2`
+    const rows = await supabaseFetch(url)
+
+    if (!rows?.length) {
+      return res.status(404).json({ error: 'Sin datos disponibles' })
+    }
+
+    const ultima = rows[0]
+    const pm25Actual = parseFloat(ultima.pm2_5) || 0
+    const banda = bandaDesPm25(pm25Actual)
+
+    let deltaPm25 = null
+    let iconoTendencia = '→'
+    if (rows.length >= 2) {
+      const pm25Anterior = parseFloat(rows[1].pm2_5) || 0
+      deltaPm25 = +(pm25Actual - pm25Anterior).toFixed(1)
+      iconoTendencia = deltaPm25 > 2 ? '↑' : deltaPm25 < -2 ? '↓' : '→'
+    }
+
+    return res.json({
+      nivel_alerta: banda.nivel,
+      banda_nombre: banda.nombre,
+      mensaje_general: banda.mensaje_general,
+      mensaje_expuesto: banda.mensaje_expuesto,
+      contexto_activo: banda.contexto,
+      delta_aqi: deltaPm25,
+      icono_tendencia: iconoTendencia,
+      pm25: pm25Actual,
+      timestamp: ultima.hora_sensor_utc,
+    })
+  } catch (err) {
+    res.status(500).json({ error: 'Error generando recomendación', detail: err.message })
+  }
+})
+
 app.get('/api/davis', async (req, res) => {
   const type = req.query.type ?? 'latest'
 
@@ -499,23 +507,19 @@ app.get('/api/davis', async (req, res) => {
     }
 
     if (type === 'history') {
-      const since = new Date(Date.now() - 3 * 60 * 60 * 1000)
-        .toISOString()
-        .replace('T', ' ')
-        .slice(0, 19)
       const url =
         `${SUPABASE_URL}/rest/v1/lecturas_davis` +
         `?select=hora_sensor_utc,aqi,pm2_5,pm10` +
-        `&order=hora_sensor_utc.asc` +
-        `&hora_sensor_utc=gte.${encodeURIComponent(since)}` +
-        `&limit=180`
+        `&order=hora_sensor_utc.desc` +
+        `&limit=36`
       const rows = await supabaseFetch(url)
-      return res.json(rows ?? [])
+      const sorted = (rows ?? []).reverse()
+      return res.json(sorted)
     }
 
     if (type === 'historico') {
-      const fromDate = req.query.from  // optional YYYY-MM-DD
-      const toDate   = req.query.to    // optional YYYY-MM-DD
+      const fromDate = req.query.from
+      const toDate   = req.query.to
 
       const allRows = []
       const batchSize = 1000
@@ -546,7 +550,7 @@ app.get('/api/davis', async (req, res) => {
       const avg = arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0
       const monthlyMap = {}
       const hourlyMap = {}
-      const dist = { good: 0, moderate: 0, usg: 0, unhealthy: 0, veryUnhealthy: 0 }
+      const dist = { good: 0, moderate: 0, usg: 0, unhealthy: 0, veryUnhealthy: 0, hazardous: 0 }
 
       for (const row of allRows) {
         const dt = new Date(row.hora_sensor_utc.replace(' ', 'T') + 'Z')
@@ -570,7 +574,8 @@ app.get('/api/davis', async (req, res) => {
         else if (aqi <= 100) dist.moderate++
         else if (aqi <= 150) dist.usg++
         else if (aqi <= 200) dist.unhealthy++
-        else dist.veryUnhealthy++
+        else if (aqi <= 300) dist.veryUnhealthy++
+        else dist.hazardous++
       }
 
       const total = allRows.length
@@ -594,7 +599,7 @@ app.get('/api/davis', async (req, res) => {
         pm25: hourlyMap[h] ? +avg(hourlyMap[h].pm25).toFixed(1) : 0,
       }))
 
-      const allAqi = allRows.map(r => parseFloat(r.aqi) || 0)
+      const allAqi  = allRows.map(r => parseFloat(r.aqi) || 0)
       const allPm25 = allRows.map(r => parseFloat(r.pm2_5) || 0)
       const allPm10 = allRows.map(r => parseFloat(r.pm10) || 0)
 
@@ -603,18 +608,19 @@ app.get('/api/davis', async (req, res) => {
         monthly,
         hourly,
         distribution: {
-          good: pct(dist.good),
-          moderate: pct(dist.moderate),
-          usg: pct(dist.usg),
-          unhealthy: pct(dist.unhealthy),
+          good:         pct(dist.good),
+          moderate:     pct(dist.moderate),
+          usg:          pct(dist.usg),
+          unhealthy:    pct(dist.unhealthy),
           veryUnhealthy: pct(dist.veryUnhealthy),
+          hazardous:    pct(dist.hazardous),
         },
         overallAvg: {
-          aqi: +avg(allAqi).toFixed(1),
-          pm25: +avg(allPm25).toFixed(1),
-          pm10: +avg(allPm10).toFixed(1),
-          temp: +avg(allRows.map(r => parseFloat(r.temperatura) || 0)).toFixed(1),
-          hum: +avg(allRows.map(r => parseFloat(r.humedad) || 0)).toFixed(1),
+          aqi:    +avg(allAqi).toFixed(1),
+          pm25:   +avg(allPm25).toFixed(1),
+          pm10:   +avg(allPm10).toFixed(1),
+          temp:   +avg(allRows.map(r => parseFloat(r.temperatura) || 0)).toFixed(1),
+          hum:    +avg(allRows.map(r => parseFloat(r.humedad) || 0)).toFixed(1),
           maxPm25: allPm25.length ? +Math.max(...allPm25).toFixed(0) : 0,
           maxPm10: allPm10.length ? +Math.max(...allPm10).toFixed(0) : 0,
         },
@@ -622,42 +628,54 @@ app.get('/api/davis', async (req, res) => {
     }
 
     if (type === 'heatmap') {
-      const from  = req.query.from   // YYYY-MM-DD
-      const to    = req.query.to     // YYYY-MM-DD
-      const group = req.query.group ?? 'day'  // 'day' | 'month'
+      const from  = req.query.from
+      const to    = req.query.to
+      const group = req.query.group ?? 'day'
 
-      if (!from || !to) return res.status(400).json({ error: 'from and to are required' })
-
-      const fromTs = `${from} 00:00:00`
-      const toTs   = `${to} 23:59:59`
-
-      const allRows = []
-      const batchSize = 1000
-      let offset = 0
-      while (true) {
-        const url =
-          `${SUPABASE_URL}/rest/v1/lecturas_davis` +
-          `?select=hora_sensor_utc,aqi` +
-          `&order=hora_sensor_utc.asc` +
-          `&hora_sensor_utc=gte.${encodeURIComponent(fromTs)}` +
-          `&hora_sensor_utc=lte.${encodeURIComponent(toTs)}` +
-          `&limit=${batchSize}&offset=${offset}`
-        const rows = await supabaseFetch(url)
-        if (!rows?.length) break
-        allRows.push(...rows)
-        if (rows.length < batchSize) break
-        offset += batchSize
+      const cacheKey = `${from}|${to}|${group}`
+      const cached = heatmapCache.get(cacheKey)
+      if (cached && Date.now() - cached.ts < HEATMAP_CACHE_TTL) {
+        return res.json(cached.data)
       }
 
-      const seenHm = new Set()
-      const uniqueHm = allRows.filter(r => {
-        if (seenHm.has(r.hora_sensor_utc)) return false
-        seenHm.add(r.hora_sensor_utc)
-        return true
-      })
-      allRows.length = 0; allRows.push(...uniqueHm)
+      const batchSize = 1000
+
+      let baseParams = `?select=hora_sensor_utc,aqi`
+      if (from) baseParams += `&hora_sensor_utc=gte.${encodeURIComponent(from + ' 00:00:00')}`
+      if (to)   baseParams += `&hora_sensor_utc=lte.${encodeURIComponent(to   + ' 23:59:59')}`
+
+      const baseUrl = `${SUPABASE_URL}/rest/v1/lecturas_davis${baseParams}`
+
+      // 1. Obtener total de filas para construir offsets
+      const totalCount = await supabaseCount(baseUrl)
+
+      // 2. Disparar todos los batches en paralelo
+      const offsets = []
+      for (let o = 0; o < Math.max(totalCount, 1); o += batchSize) offsets.push(o)
+
+      const batches = await Promise.all(offsets.map(offset =>
+        supabaseFetch(
+          `${SUPABASE_URL}/rest/v1/lecturas_davis${baseParams}` +
+          `&order=hora_sensor_utc.asc&limit=${batchSize}&offset=${offset}`
+        )
+      ))
+
+      // 3. Unir y deduplicar
+      const seen = new Set()
+      const allRows = []
+      for (const batch of batches) {
+        if (!batch?.length) continue
+        for (const r of batch) {
+          if (!seen.has(r.hora_sensor_utc)) {
+            seen.add(r.hora_sensor_utc)
+            allRows.push(r)
+          }
+        }
+      }
 
       const buckets = {}
+      let aqiSum = 0, aqiMin = Infinity, aqiMax = -Infinity
+
       for (const row of allRows) {
         const dt  = new Date(row.hora_sensor_utc.replace(' ', 'T') + 'Z')
         const h   = dt.getUTCHours()
@@ -668,6 +686,9 @@ app.get('/api/davis', async (req, res) => {
         if (!buckets[key]) buckets[key] = {}
         if (!buckets[key][h]) buckets[key][h] = []
         buckets[key][h].push(aqi)
+        aqiSum += aqi
+        if (aqi < aqiMin) aqiMin = aqi
+        if (aqi > aqiMax) aqiMax = aqi
       }
 
       const labels = Object.keys(buckets).sort()
@@ -680,25 +701,295 @@ app.get('/api/davis', async (req, res) => {
         })
       )
 
-      const allAqi = allRows.map(r => parseFloat(r.aqi) || 0)
-      const globalAvg = allAqi.length ? +(allAqi.reduce((a, b) => a + b, 0) / allAqi.length).toFixed(1) : 0
-
-      return res.json({
+      const n = allRows.length
+      const result = {
         labels,
         matrix,
-        total: allRows.length,
+        total: n,
         summary: {
-          avg: globalAvg,
-          min: allAqi.length ? +Math.min(...allAqi).toFixed(1) : 0,
-          max: allAqi.length ? +Math.max(...allAqi).toFixed(1) : 0,
+          avg: n ? +(aqiSum / n).toFixed(1) : 0,
+          min: n ? +aqiMin.toFixed(1) : 0,
+          max: n ? +aqiMax.toFixed(1) : 0,
         },
-      })
+      }
+
+      heatmapCache.set(cacheKey, { ts: Date.now(), data: result })
+      return res.json(result)
     }
 
     res.status(400).json({ error: 'type must be latest, history, historico, or heatmap' })
   } catch (err) {
     console.error('API error:', err.message)
     res.status(500).json({ error: err.message })
+  }
+})
+
+//  Predicción AQI +1 hora (Python) 
+app.get('/api/prediccion', async (req, res) => {
+  try {
+    const response = await fetch('http://127.0.0.1:5000/predecir', {
+      signal: AbortSignal.timeout(10000),
+    })
+    if (!response.ok) throw new Error(`Python API ${response.status}`)
+    const data = await response.json()
+    res.json(data)
+  } catch (err) {
+    console.error('Error prediccion:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+//  Datos del modelo: y_real vs y_predicho 
+function parsearCSV(ruta) {
+  const lineas  = readFileSync(ruta, 'utf8').trim().split('\n')
+  const headers = lineas[0].split(',').map(h => h.trim())
+  return lineas.slice(1).map(linea => {
+    const vals = linea.split(',')
+    const fila = {}
+    headers.forEach((h, i) => {
+      const raw = (vals[i] || '').trim()
+      fila[h]  = isNaN(raw) || raw === '' ? raw : parseFloat(raw)
+    })
+    return fila
+  })
+}
+
+
+app.get('/api/modelo', (req, res) => {
+  //const ruta = new URL('./static_data/predicciones_test.csv', import.meta.url).pathname
+  const ruta = join(__dirname, 'static_data', 'predicciones_test.csv')
+  console.log('Buscando CSV en:', ruta)
+  console.log('Existe:', existsSync(ruta))
+  if (!existsSync(ruta)) {
+    return res.status(404).json({ error: 'CSV no encontrado.' })
+  }
+  const datos = parsearCSV(ruta)
+  res.json(datos)
+})
+
+// ── Gemini AI — helpers ────────────────────────────────────────────────
+
+function getMexicoTime() {
+  const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Mexico_City' }))
+  const dia = d.getDay() === 0 ? 6 : d.getDay() - 1  // 0=lunes…6=domingo
+  return { hora: d.getHours(), minuto: d.getMinutes(), dia }
+}
+
+function getContextoEscom(hora, minuto, dia) {
+  const totalMin = hora * 60 + minuto
+  const RECESOS = [[10 * 60, 10 * 60 + 30], [18 * 60, 18 * 60 + 30]]
+  const CAMBIOS = [7 * 60, 8 * 60 + 30, 10 * 60 + 30, 12 * 60, 13 * 60 + 30, 15 * 60, 16 * 60 + 30, 18 * 60 + 30, 20 * 60]
+
+  if (dia >= 5) return { descripcion: 'Fin de semana — actividad reducida en campus', esReceso: false, esCambio: false }
+  if (hora < 7)  return { descripcion: 'Campus cerrado — horas de madrugada', esReceso: false, esCambio: false }
+  if (hora >= 21) return { descripcion: 'Fin de jornada académica', esReceso: false, esCambio: false }
+
+  const esReceso = RECESOS.some(([ini, fin]) => totalMin >= ini && totalMin < fin)
+  if (esReceso) return { descripcion: 'Hora de receso — estudiantes en exteriores del campus', esReceso: true, esCambio: false }
+
+  const esCambio = CAMBIOS.some(c => Math.abs(totalMin - c) <= 5)
+  if (esCambio) return { descripcion: 'Cambio de clase — alto tránsito por pasillos y patios', esReceso: false, esCambio: true }
+
+  if (hora >= 7 && hora <= 9) return { descripcion: 'Hora pico matutina — alta afluencia al campus', esReceso: false, esCambio: false }
+  if (hora >= 12 && hora <= 13) return { descripcion: 'Horario de comida — estudiantes posiblemente en exteriores', esReceso: false, esCambio: false }
+  return { descripcion: 'Horario de clases normal — estudiantes principalmente en aulas', esReceso: false, esCambio: false }
+}
+
+function buildGeminiPrompt(ultima, historial, ctx) {
+  const DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
+  const { hora, minuto, dia } = ctx.tiempo
+  const diaStr = DIAS[dia] ?? 'Desconocido'
+
+  // Tendencia AQI sobre el historial disponible
+  let tendencia = 'estable →'
+  let deltaAqi = 0
+  if (historial.length >= 3) {
+    const aqis = historial.slice(0, 4).map(r => parseFloat(r.aqi) || 0)
+    deltaAqi = +(aqis[0] - aqis[Math.min(3, aqis.length - 1)]).toFixed(1)
+    tendencia = deltaAqi > 5 ? 'subiendo ↑' : deltaAqi < -5 ? 'bajando ↓' : 'estable →'
+  }
+
+  const historialStr = historial.slice(0, 6).map((r, i) => {
+    const label = i === 0 ? 'Actual' : `Hace ~${i * 5} min`
+    return `  [${label}] AQI: ${Math.round(parseFloat(r.aqi))}, PM2.5: ${parseFloat(r.pm2_5).toFixed(1)} µg/m³`
+  }).join('\n')
+
+  const pm25 = parseFloat(ultima.pm2_5).toFixed(1)
+  const pm10 = parseFloat(ultima.pm10).toFixed(1)
+  const pm1  = parseFloat(ultima.pm1 || 0).toFixed(1)
+  const aqi  = Math.round(parseFloat(ultima.aqi))
+  const temp = parseFloat(ultima.temperatura).toFixed(1)
+  const hum  = parseFloat(ultima.humedad).toFixed(0)
+
+  const bandaNOM = aqi <= 50 ? 'Buena' : aqi <= 100 ? 'Aceptable' : aqi <= 150 ? 'Mala para grupos sensibles' : aqi <= 200 ? 'No saludable' : 'Muy no saludable'
+
+  const systemInstruction = `Experto en calidad del aire para escuela ESCOM-IPN Isla de Datos Urbanos, CDMX. Responde SOLO con JSON válido en español, sin markdown.
+Estructura exacta:
+{"resumen":"<1 oración>","nivel_riesgo":"bajo|moderado|alto|muy_alto","emoji_estado":"<emoji>","recomendaciones_generales":["<máx 2 oraciones>","..."],"recomendaciones_grupos_sensibles":["<asma/EPOC/adultos mayores>"],"acciones_inmediatas":[],"mensaje_contexto":"<contexto horario campus>"}`
+
+  const receso = ctx.escom.esReceso ? ' RECESO: estudiantes en exteriores.' : ''
+  const cambio = ctx.escom.esCambio ? ' CAMBIO DE CLASE: alto tránsito.' : ''
+  const humo = ctx.humo ? ' HUMO detectado por cámara.' : ''
+
+  const userMessage = `ESCOM IPN | ${diaStr} ${hora}:${String(minuto).padStart(2, '0')}h | ${ctx.escom.descripcion}${receso}${cambio}${humo}
+AQI:${aqi}(${bandaNOM}) PM2.5:${pm25}µg/m³ PM10:${pm10}µg/m³ Temp:${temp}°C Hum:${hum}%
+Tendencia:${tendencia}(Δ${deltaAqi > 0 ? '+' : ''}${deltaAqi}) | Historial(AQI): ${historial.slice(0, 4).map(r => Math.round(parseFloat(r.aqi))).join('→')}
+${ctx.personas > 0 ? `Personas exterior: ${ctx.personas}` : ''}
+Genera recomendaciones. "acciones_inmediatas":[] si nivel no es alto/muy_alto.`
+
+  return { systemInstruction, userMessage }
+}
+
+function parseGeminiJSON(text) {
+  return JSON.parse(
+    text.trim()
+      .replace(/^```json\s*/i, '')
+      .replace(/^```\s*/i, '')
+      .replace(/```\s*$/i, '')
+      .trim()
+  )
+}
+
+async function fetchGeminiWithRetry(body, maxRetries = 3) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    const res = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(20000),
+    })
+    if (res.ok) return res
+    if (res.status === 429 && attempt < maxRetries) {
+      const retryAfter = parseInt(res.headers.get('Retry-After') || '0', 10)
+      const delay = retryAfter > 0 ? retryAfter * 1000 : Math.min(2 ** attempt * 1000, 16000)
+      console.warn(`Gemini 429 — reintento ${attempt}/${maxRetries} en ${delay}ms`)
+      await new Promise(r => setTimeout(r, delay))
+      continue
+    }
+    const errBody = await res.text()
+    throw new Error(`Gemini API ${res.status}: ${errBody.slice(0, 300)}`)
+  }
+}
+
+// ── Árbol de decisión — fallback cuando Gemini falla ──────────────────
+
+function buildArbolFallback(ultima, escom) {
+  const pm25 = parseFloat(ultima.pm2_5) || 0
+  const aqi  = Math.round(parseFloat(ultima.aqi))
+  const banda = bandaDesPm25(pm25)
+
+  const nivel_riesgo = aqi <= 50 ? 'bajo' : aqi <= 100 ? 'moderado' : aqi <= 150 ? 'alto' : 'muy_alto'
+  const emojis = { bajo: '😊', moderado: '😐', alto: '😷', muy_alto: '🚨' }
+
+  const recsGenerales = [banda.mensaje_general]
+  if (banda.mensaje_expuesto) recsGenerales.push(banda.mensaje_expuesto)
+
+  const accionesInmediatas = aqi > 150
+    ? ['Evite exposición prolongada al aire libre', 'Use mascarilla N95 si debe salir']
+    : []
+
+  return {
+    resumen: banda.mensaje_general,
+    nivel_riesgo,
+    emoji_estado: emojis[nivel_riesgo],
+    recomendaciones_generales: recsGenerales,
+    recomendaciones_grupos_sensibles: banda.mensaje_expuesto ? [banda.mensaje_expuesto] : [],
+    acciones_inmediatas: accionesInmediatas,
+    mensaje_contexto: banda.contexto ?? escom.descripcion,
+    timestamp: ultima.hora_sensor_utc,
+    pm25,
+    aqi,
+    fuente: 'arbol',
+    fromCache: false,
+    generatedAt: new Date().toISOString(),
+  }
+}
+
+// ── Gemini AI — endpoint ────────────────────────────────────────────────
+
+app.get('/api/ia/recomendacion', async (req, res) => {
+  const forceRefresh = req.query.refresh === 'true'
+
+  try {
+    const url =
+      `${SUPABASE_URL}/rest/v1/lecturas_davis` +
+      `?select=hora_sensor_utc,pm2_5,pm10,pm1,temperatura,humedad,aqi` +
+      `&order=hora_sensor_utc.desc&limit=10`
+
+    const rows = await supabaseFetch(url)
+    if (!rows?.length) return res.status(404).json({ error: 'Sin datos de sensores disponibles' })
+
+    const ultima = rows[0]
+    const aqiActual = Math.round(parseFloat(ultima.aqi))
+    const bandActual = aqiActual <= 50 ? 'Buena' : aqiActual <= 100 ? 'Aceptable' : aqiActual <= 150 ? 'Grupos sensibles' : aqiActual <= 200 ? 'No saludable' : 'Muy no saludable'
+
+    const { hora, minuto, dia } = getMexicoTime()
+    const escom = getContextoEscom(hora, minuto, dia)
+
+    if (!forceRefresh && geminiCache.data) {
+      // Si Supabase no tiene datos nuevos → caché directo, sin llamar a Gemini
+      if (ultima.hora_sensor_utc === geminiCache.lastDataTimestamp) {
+        return res.json({ ...geminiCache.data, fromCache: true })
+      }
+
+      // Hay dato nuevo de Supabase — solo llamar a Gemini si AQI o banda cambiaron significativamente
+      const aqiSinCambio = Math.abs(aqiActual - (geminiCache.lastAqi ?? 0)) < GEMINI_AQI_DELTA
+      const bandSinCambio = bandActual === (geminiCache.lastBand ?? '')
+      if (aqiSinCambio && bandSinCambio) {
+        // Actualizar el puntero de datos pero reusar la recomendación anterior
+        geminiCache.lastDataTimestamp = ultima.hora_sensor_utc
+        geminiCache.lastAqi = aqiActual
+        geminiCache.lastBand = bandActual
+        return res.json({ ...geminiCache.data, fromCache: true })
+      }
+    }
+
+    if (GEMINI_API_KEY) {
+      try {
+        const ctx = { tiempo: { hora, minuto, dia }, escom, personas: 0, humo: false }
+        const { systemInstruction, userMessage } = buildGeminiPrompt(ultima, rows, ctx)
+
+        const geminiRes = await fetchGeminiWithRetry({
+          systemInstruction: { parts: [{ text: systemInstruction }] },
+          contents: [{ role: 'user', parts: [{ text: userMessage }] }],
+          generationConfig: {
+            temperature: 0.3,
+            maxOutputTokens: 512,
+            responseMimeType: 'application/json',
+          },
+        })
+
+        const geminiData = await geminiRes.json()
+        const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text
+        if (!rawText) throw new Error('Gemini no retornó contenido en la respuesta')
+
+        const iaRec = parseGeminiJSON(rawText)
+        const result = {
+          ...iaRec,
+          timestamp: ultima.hora_sensor_utc,
+          pm25: parseFloat(ultima.pm2_5),
+          aqi: aqiActual,
+          contexto_universitario: escom.descripcion,
+          fuente: 'gemini',
+          fromCache: false,
+          generatedAt: new Date().toISOString(),
+        }
+
+        geminiCache = { data: result, lastDataTimestamp: ultima.hora_sensor_utc, lastAqi: aqiActual, lastBand: bandActual }
+        return res.json(result)
+      } catch (geminiErr) {
+        console.warn('Gemini falló, usando árbol de decisión:', geminiErr.message)
+      }
+    }
+
+    // Fallback: árbol de decisión local
+    return res.json(buildArbolFallback(ultima, escom))
+  } catch (err) {
+    console.error('IA Recomendación error:', err.message)
+    if (geminiCache.data) {
+      return res.json({ ...geminiCache.data, fromCache: true, cacheExpired: true })
+    }
+    res.status(500).json({ error: 'Error al generar recomendación', detail: err.message })
   }
 })
 

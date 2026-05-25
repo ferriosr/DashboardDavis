@@ -1,4 +1,4 @@
-import { useState, useEffect, Fragment } from 'react'
+import { useState, useEffect, useRef, Fragment } from 'react'
 
 const MONTHS = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
 
@@ -54,21 +54,136 @@ const STAT = ({ label, value, color, dark }) => (
   </div>
 )
 
+const DAY_THRESHOLD = 60
+
+function daysBetween(from, to) {
+  if (!from || !to) return 0
+  return Math.round((new Date(to) - new Date(from)) / 86400000)
+}
+
+function getMonthsInRange(from, to) {
+  const months = []
+  let cur = new Date(from + 'T00:00:00Z')
+  const end = new Date(to + 'T00:00:00Z')
+  while (cur <= end) {
+    const y = cur.getUTCFullYear()
+    const m = cur.getUTCMonth()
+    const mf = `${y}-${String(m + 1).padStart(2, '0')}-01`
+    const lastDay = new Date(Date.UTC(y, m + 1, 0)).getUTCDate()
+    const mt = `${y}-${String(m + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+    months.push({ from: mf, to: mt })
+    cur = new Date(Date.UTC(y, m + 1, 1))
+  }
+  return months
+}
+
+function mergeHeatmaps(base, incoming) {
+  if (!base || base.labels.length === 0) {
+    return {
+      labels: [...incoming.labels],
+      matrix: incoming.matrix.map(row => [...row]),
+      total: incoming.total,
+      summary: {
+        avg: incoming.summary.avg,
+        min: incoming.summary.min,
+        max: incoming.summary.max,
+        _sum: incoming.summary.avg * incoming.total,
+        _min: incoming.summary.min,
+        _max: incoming.summary.max,
+      },
+    }
+  }
+  const baseLblIdx = {}
+  base.labels.forEach((l, i) => { baseLblIdx[l] = i })
+  const inLblIdx = {}
+  incoming.labels.forEach((l, i) => { inLblIdx[l] = i })
+  const allLabels = [...new Set([...base.labels, ...incoming.labels])].sort()
+  const newMatrix = Array.from({ length: 24 }, (_, h) =>
+    allLabels.map(lbl => {
+      if (baseLblIdx[lbl] !== undefined) return base.matrix[h][baseLblIdx[lbl]]
+      if (inLblIdx[lbl] !== undefined) return incoming.matrix[h][inLblIdx[lbl]]
+      return null
+    })
+  )
+  const newTotal = base.total + incoming.total
+  const newSum = (base.summary._sum ?? 0) + incoming.summary.avg * incoming.total
+  const newMin = Math.min(base.summary._min ?? Infinity, incoming.summary.min)
+  const newMax = Math.max(base.summary._max ?? -Infinity, incoming.summary.max)
+  return {
+    labels: allLabels,
+    matrix: newMatrix,
+    total: newTotal,
+    summary: {
+      avg: newTotal > 0 ? +(newSum / newTotal).toFixed(1) : 0,
+      min: +newMin.toFixed(1),
+      max: +newMax.toFixed(1),
+      _sum: newSum,
+      _min: newMin,
+      _max: newMax,
+    },
+  }
+}
+
 export default function HeatmapAQI({ from, to, theme }) {
   const dark = theme === 'dark'
-  const [group, setGroup] = useState('day')
+  const noFilter = !from || !to
+  const isLarge = noFilter || daysBetween(from, to) > DAY_THRESHOLD
+  const [group, setGroup] = useState(() => isLarge ? 'month' : 'day')
   const [data,  setData]  = useState(null)
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState(null)
+  const [progress, setProgress] = useState(null) // { done, total }
+  const abortRef = useRef(null)
 
   useEffect(() => {
-    if (!from || !to) return
+    if (isLarge && group === 'day') setGroup('month')
+  }, [isLarge])
+
+  useEffect(() => {
+
+    if (abortRef.current) abortRef.current.abort()
+    const abort = new AbortController()
+    abortRef.current = abort
+
     setLoading(true)
     setError(null)
-    fetch(`/api/davis?type=heatmap&from=${from}&to=${to}&group=${group}`)
-      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
-      .then(d => { setData(d); setLoading(false) })
-      .catch(e => { setError(e.message); setLoading(false) })
+    setData(null)
+    setProgress(null)
+
+    if (group === 'month' && isLarge && !noFilter) {
+      const months = getMonthsInRange(from, to)
+      setProgress({ done: 0, total: months.length })
+      const accumulated = { current: null }
+      let done = 0
+
+      const fetchMonth = ({ from: mf, to: mt }) =>
+        fetch(`/api/davis?type=heatmap&from=${mf}&to=${mt}&group=month`, { signal: abort.signal })
+          .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
+          .then(d => {
+            accumulated.current = mergeHeatmaps(accumulated.current, d)
+            done++
+            setData({ ...accumulated.current })
+            setProgress({ done, total: months.length })
+            if (done === 1) setLoading(false)
+          })
+
+      Promise.all(months.map(fetchMonth))
+        .catch(e => {
+          if (e.name !== 'AbortError') { setError(e.message); setLoading(false) }
+        })
+    } else {
+      const params = new URLSearchParams({ type: 'heatmap', group })
+      if (from) params.set('from', from)
+      if (to)   params.set('to', to)
+      fetch(`/api/davis?${params}`, { signal: abort.signal })
+        .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
+        .then(d => { setData(d); setLoading(false) })
+        .catch(e => {
+          if (e.name !== 'AbortError') { setError(e.message); setLoading(false) }
+        })
+    }
+
+    return () => abort.abort()
   }, [from, to, group])
 
   const cellW = group === 'day' ? 34 : 56
@@ -84,29 +199,68 @@ export default function HeatmapAQI({ from, to, theme }) {
       {/* ── Group toggle ── */}
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 18, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', gap: 2, background: toggleBg, borderRadius: 10, padding: 3 }}>
-          {[['day', 'Por día'], ['month', 'Por mes']].map(([g, label]) => (
-            <button
-              key={g}
-              onClick={() => setGroup(g)}
-              style={{
-                background: group === g ? '#2d62ed' : 'transparent',
-                border: 'none',
-                borderRadius: 8,
-                color: group === g ? '#fff' : mutedColor,
-                fontSize: 12,
-                fontWeight: 700,
-                padding: '6px 14px',
-                cursor: 'pointer',
-                transition: 'background 0.2s, color 0.2s',
-                fontFamily: 'DM Sans, sans-serif',
-              }}
-            >
-              {label}
-            </button>
-          ))}
+          {[['day', 'Por día'], ['month', 'Por mes']].map(([g, label]) => {
+            const disabled = g === 'day' && isLarge
+            return (
+              <button
+                key={g}
+                onClick={() => !disabled && setGroup(g)}
+                title={disabled ? `Rangos mayores a ${DAY_THRESHOLD} días solo muestran vista mensual` : undefined}
+                style={{
+                  background: group === g ? '#2d62ed' : 'transparent',
+                  border: 'none',
+                  borderRadius: 8,
+                  color: disabled ? (dark ? '#3a4455' : '#c5cdd9') : group === g ? '#fff' : mutedColor,
+                  fontSize: 12,
+                  fontWeight: 700,
+                  padding: '6px 14px',
+                  cursor: disabled ? 'not-allowed' : 'pointer',
+                  transition: 'background 0.2s, color 0.2s',
+                  fontFamily: 'DM Sans, sans-serif',
+                }}
+              >
+                {label}
+              </button>
+            )
+          })}
         </div>
 
-        {data && !loading && (
+        {isLarge && !progress && (
+          <span style={{ fontSize: 11, color: subColor, fontFamily: 'DM Mono, monospace' }}>
+            Rango &gt;{DAY_THRESHOLD} días — vista mensual automática
+          </span>
+        )}
+
+        {progress && progress.done < progress.total && (
+          <span style={{ fontSize: 11, color: subColor, fontFamily: 'DM Mono, monospace', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{
+              display: 'inline-block',
+              width: 80,
+              height: 4,
+              borderRadius: 2,
+              background: dark ? '#1e2535' : '#e2e8f0',
+              overflow: 'hidden',
+            }}>
+              <span style={{
+                display: 'block',
+                height: '100%',
+                width: `${(progress.done / progress.total) * 100}%`,
+                background: '#2d62ed',
+                borderRadius: 2,
+                transition: 'width 0.3s',
+              }} />
+            </span>
+            {progress.done}/{progress.total} meses
+          </span>
+        )}
+
+        {data && !loading && progress?.done === progress?.total && (
+          <span style={{ fontSize: 11, color: subColor, fontFamily: 'DM Mono, monospace' }}>
+            {data.labels.length} {group === 'day' ? 'días' : 'meses'} · {data.total.toLocaleString()} registros
+          </span>
+        )}
+
+        {data && !loading && !progress && (
           <span style={{ fontSize: 11, color: subColor, fontFamily: 'DM Mono, monospace' }}>
             {data.labels.length} {group === 'day' ? 'días' : 'meses'} · {data.total.toLocaleString()} registros
           </span>
@@ -131,8 +285,51 @@ export default function HeatmapAQI({ from, to, theme }) {
       )}
 
       {loading && (
-        <div style={{ color: subColor, fontSize: 12, fontFamily: 'DM Mono, monospace', padding: '30px 0', textAlign: 'center' }}>
-          Cargando mapa de calor…
+        <div>
+          <style>{`
+            @keyframes hm-pulse {
+              0%,100% { opacity: 0.35 }
+              50%      { opacity: 0.7  }
+            }
+          `}</style>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 18 }}>
+            {[80, 60, 60].map((w, i) => (
+              <div key={i} style={{
+                width: w, height: 52, borderRadius: 10,
+                background: dark ? '#1e2535' : '#e2e8f0',
+                animation: `hm-pulse 1.4s ease-in-out ${i * 0.15}s infinite`,
+              }} />
+            ))}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '42px repeat(14, 34px)', gap: 2 }}>
+            <div />
+            {Array.from({ length: 14 }, (_, i) => (
+              <div key={i} style={{
+                height: 12, borderRadius: 3,
+                background: dark ? '#1e2535' : '#e2e8f0',
+                animation: `hm-pulse 1.4s ease-in-out ${i * 0.05}s infinite`,
+              }} />
+            ))}
+            {Array.from({ length: 24 }, (_, h) => (
+              <Fragment key={h}>
+                <div style={{
+                  height: 24, borderRadius: 3,
+                  background: dark ? '#1a2030' : '#edf2f7',
+                  animation: `hm-pulse 1.4s ease-in-out ${h * 0.03}s infinite`,
+                }} />
+                {Array.from({ length: 14 }, (_, ci) => (
+                  <div key={ci} style={{
+                    height: 24, borderRadius: 3,
+                    background: dark ? '#1e2535' : '#e2e8f0',
+                    animation: `hm-pulse 1.4s ease-in-out ${(h * 14 + ci) * 0.01}s infinite`,
+                  }} />
+                ))}
+              </Fragment>
+            ))}
+          </div>
+          <div style={{ color: subColor, fontSize: 11, fontFamily: 'DM Mono, monospace', marginTop: 12, textAlign: 'center' }}>
+            Cargando mapa de calor…
+          </div>
         </div>
       )}
 
