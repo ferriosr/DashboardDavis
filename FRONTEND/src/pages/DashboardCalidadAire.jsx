@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Leaf, Droplets, Thermometer, Wind, Cloud, CigaretteOff, Users, Video } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Leaf, Droplets, Thermometer, Wind, Cloud, CigaretteOff, Users, Video, AlertCircle } from 'lucide-react'
 import MetricCard from '../components/MetricCard'
 import IARecomCard from '../components/IARecomCard'
 import TrendChart from '../components/TrendChart'
@@ -12,8 +12,22 @@ import {
   tempColor, tempLabel,
 } from '../utils/aqi'
 
-export default function DashboardCalidadAire({ data, history, theme }) {
+export default function DashboardCalidadAire({ data, history, theme, cameraOnline, detecciones }) {
   const [modalType, setModalType] = useState(null)
+  const [videoError, setVideoError] = useState(false)
+
+  useEffect(() => {
+    if (cameraOnline) {
+      setVideoError(false)
+    }
+  }, [cameraOnline])
+
+  const handleVideoError = () => {
+    setVideoError(true)
+  }
+
+  const statusBadge = cameraOnline && !videoError ? 'En Vivo' : 'Sin Conexión'
+  const statusBadgeClass = cameraOnline && !videoError ? 'badge-success' : 'badge-muted'
 
   return (
     <>
@@ -56,28 +70,58 @@ export default function DashboardCalidadAire({ data, history, theme }) {
       </div>
 
       <div className="cards-row row-alerts">
-        <div className="card card-muted">
-          <div className="card-content">
-            <div className="card-title">Humo</div>
-            <div className="card-subtitle">De Tabaco</div>
-            <div className="card-value" style={{ color: 'var(--text-muted)' }}>--</div>
-            <div className="card-badge badge-muted">En proceso de conexión</div>
-          </div>
-          <div className="card-emoji"><CigaretteOff size={44} /></div>
-        </div>
-        <div className="card card-muted">
-          <div className="card-content">
-            <div className="card-title">Personas</div>
-            <div className="card-subtitle">Ocupación</div>
-            <div className="card-value" style={{ color: 'var(--text-muted)' }}>
-              -- <span className="card-value-sub">Detectadas</span>
+        {cameraOnline ? (
+          <>
+            <div className="card card-success">
+              <div className="card-content">
+                <div className="card-title">Humo</div>
+                <div className="card-subtitle">De Tabaco</div>
+                <div className="card-value" style={{ color: detecciones.cigarro ? '#e74c3c' : '#2ecc71' }}>
+                  {detecciones.cigarro ? 'SÍ' : 'NO'}
+                </div>
+                <div className={`card-badge ${detecciones.cigarro ? 'badge-danger' : 'badge-success'}`}>
+                  {detecciones.cigarro ? 'Detectado' : 'No detectado'}
+                </div>
+              </div>
+              <div className="card-emoji"><CigaretteOff size={44} /></div>
             </div>
-            <div className="card-badge badge-muted">En proceso de conexión</div>
-          </div>
-          <div className="card-emoji"><Users size={44} /></div>
-        </div>
+            <div className="card card-success">
+              <div className="card-content">
+                <div className="card-title">Personas</div>
+                <div className="card-subtitle">Ocupación</div>
+                <div className="card-value" style={{ color: 'var(--blue)' }}>
+                  {detecciones.personas} <span className="card-value-sub">Detectadas</span>
+                </div>
+                <div className="card-badge badge-success">En Vivo</div>
+              </div>
+              <div className="card-emoji"><Users size={44} /></div>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="card card-muted">
+              <div className="card-content">
+                <div className="card-title">Humo</div>
+                <div className="card-subtitle">De Tabaco</div>
+                <div className="card-value" style={{ color: 'var(--text-muted)' }}>--</div>
+                <div className="card-badge badge-muted">Sin Conexión</div>
+              </div>
+              <div className="card-emoji"><CigaretteOff size={44} /></div>
+            </div>
+            <div className="card card-muted">
+              <div className="card-content">
+                <div className="card-title">Personas</div>
+                <div className="card-subtitle">Ocupación</div>
+                <div className="card-value" style={{ color: 'var(--text-muted)' }}>
+                  -- <span className="card-value-sub">Detectadas</span>
+                </div>
+                <div className="card-badge badge-muted">Sin Conexión</div>
+              </div>
+              <div className="card-emoji"><Users size={44} /></div>
+            </div>
+          </>
+        )}
       </div>
-
 
       <div className="cards-row row-video">
         <div className="card card-video">
@@ -85,11 +129,22 @@ export default function DashboardCalidadAire({ data, history, theme }) {
             <div className="card-title">Isla de Datos Urbanos</div>
             <div className="card-subtitle">Cámara de Monitoreo</div>
             <div className="video-placeholder">
-              <div className="video-placeholder-icon"><Video size={44} /></div>
-              <div className="video-placeholder-text">Próximamente</div>
-              <div className="video-placeholder-sub">La transmisión en vivo estará disponible en una actualización futura</div>
+              {cameraOnline && !videoError ? (
+                <img
+                  src="http://192.168.100.180:5000/video_feed"
+                  alt="Video Isla"
+                  className="video-feed-preview"
+                  onError={handleVideoError}
+                />
+              ) : (
+                <>
+                  <div className="video-placeholder-icon"><AlertCircle size={44} /></div>
+                  <div className="video-placeholder-text">Video no disponible</div>
+                  <div className="video-placeholder-sub">Verificar el estado de la cámara</div>
+                </>
+              )}
             </div>
-            <div className="card-badge badge-muted">Sin conexión</div>
+            <div className={`card-badge ${statusBadgeClass}`}>{statusBadge}</div>
           </div>
         </div>
       </div>

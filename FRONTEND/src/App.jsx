@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useAirQuality } from './hooks/useAirQuality'
+import { useCameraStatus } from './hooks/useCameraStatus'
 import Header from './components/Header'
 import Sidebar from './components/Sidebar'
 import NotificationsPanel from './components/NotificationsPanel'
@@ -41,6 +42,7 @@ export default function App() {
     clearAll,
   } = useAirQuality()
 
+  const { cameraOnline, detecciones } = useCameraStatus()
 
   const unreadCount = notifications.filter((n) => !n.read).length
 
@@ -70,7 +72,7 @@ export default function App() {
       {currentPage === 'historico' && <DashboardHistorico theme={theme} />}
 
       {currentPage === 'dashboard' && (
-        <DashboardCalidadAire data={data} history={history} theme={theme} />
+        <DashboardCalidadAire data={data} history={history} theme={theme} cameraOnline={cameraOnline} detecciones={detecciones} />
       )}
 
       {showNotifs && (
