@@ -2,7 +2,7 @@ import { Leaf, Radio, RefreshCw, Sun, Moon, Bell } from 'lucide-react'
 
 function formatTs(isoStr) {
   if (!isoStr) return '--'
-  const iso = isoStr.replace(' ', 'T') + (isoStr.includes('+') || isoStr.endsWith('Z') ? '' : 'Z')
+  const iso = isoStr.replace(' ', 'T')
   const d = new Date(iso)
   if (isNaN(d.getTime())) return '--'
   const dd   = String(d.getDate()).padStart(2, '0')

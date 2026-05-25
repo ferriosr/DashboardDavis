@@ -13,6 +13,8 @@ server.js agrega:
 
 from __future__ import annotations
 import threading
+import os                     # Agregado para manejar rutas
+from pathlib import Path       # Agregado para buscar la carpeta padre
 from datetime import datetime
 from contextlib import asynccontextmanager
 from typing import Optional
@@ -22,6 +24,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from motor_recomendaciones import MotorRecomendaciones, ContextoUniversidad
+
+
+# ── Configuración de Rutas Absolutas ───────────────────────────────────
+# Como este archivo está en BACKEND/recomendations, .parent nos lleva a BACKEND/
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+RUTA_MODELO = os.path.join(BASE_DIR, "modelo_aqi.json")
+RUTA_FEATURES = os.path.join(BASE_DIR, "features.json")
 
 
 # ── Estado compartido con inferencia_tabaco.py ─────────────────────────
@@ -51,11 +61,12 @@ def actualizar_historial(historial_15min: list[dict]) -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _motor
+    # Se usan las rutas absolutas calculadas dinámicamente arriba
     _motor = MotorRecomendaciones(
-        ruta_modelo="modelo_humo_escom.json",
-        ruta_meta="metadata_humo.json",
+        ruta_modelo=RUTA_MODELO,
+        ruta_features=RUTA_FEATURES,
     )
-    print("Motor de recomendaciones cargado.")
+    print("Motor de recomendaciones cargado correctamente.")
     yield
     # cleanup si necesario
 
@@ -74,7 +85,7 @@ app.add_middleware(
 # ── Schemas de respuesta ───────────────────────────────────────────────
 class RecomendacionResponse(BaseModel):
     pm25_actual: float
-    pm25_predicho: float
+    aqi_predicho: float
     aqi_estimado: int
     banda_nombre: str
     banda_nivel: int
@@ -83,7 +94,7 @@ class RecomendacionResponse(BaseModel):
     requiere_accion: bool
     tendencia: str
     icono_tendencia: str
-    delta_pm25: float
+    delta_aqi: float
     confianza_modelo: str
     feature_driver: str
     mensaje_general: str
@@ -109,16 +120,16 @@ async def estado():
     with _lock:
         n = len(_historial_compartido)
     if n == 0:
-        msg = "Sin datos aún — esperando primer bloque de 15 min"
-    elif n < 4:
-        msg = f"Modo básico (sin predicción) — {n}/4 registros para forecast"
+        msg = "Sin datos aún — esperando primer bloque de 5 min"
+    elif n < 12:
+        msg = f"Modo básico (sin predicción) — {n}/12 registros para forecast"
     else:
-        msg = "Listo con predicción XGBoost"
+        msg = "Listo con predicción XGBoost (AQI T+60)"
     return EstadoResponse(
         status="ok",
         registros_en_historial=n,
         listo=n >= 1,
-        tiene_prediccion=n >= 4,
+        tiene_prediccion=n >= 12,
         mensaje=msg,
     )
 
@@ -158,16 +169,3 @@ async def recomendacion(
 
     rec = _motor.generar(historial, contexto)
     return RecomendacionResponse(**rec.to_dict())
-
-
-# ── Integración directa con inferencia_tabaco.py ───────────────────────
-# Si prefieres un solo proceso, agrega esto al final del loop de inferencia:
-#
-# [en inferencia_tabaco.py, dentro del bloque `if len(historial_15min) >= 4`]
-#
-#   from motor_recomendaciones import MotorRecomendaciones, ContextoUniversidad
-#   motor = MotorRecomendaciones()   # fuera del loop
-#   ctx = ContextoUniversidad.desde_datetime(reloj_simulado)
-#   rec = motor.generar(historial_15min, ctx)
-#   print(f"   [RECOMENDACION] {rec.banda_nombre} {rec.icono_tendencia}")
-#   print(f"   {rec.mensaje_general}")

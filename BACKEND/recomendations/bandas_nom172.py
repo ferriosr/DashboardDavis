@@ -93,3 +93,26 @@ def banda_preventiva(pm25_actual: float, pm25_pred: float,
         efectiva = _TABLA_BANDAS[siguiente_idx][1]
 
     return efectiva, banda_actual
+
+
+def banda_preventiva_aqi(aqi_actual: int, aqi_pred: float,
+                         confianza: str = "alta") -> tuple[InfoBanda, InfoBanda]:
+    """
+    Variante de banda_preventiva que trabaja directamente con AQI.
+    Usa cuando el modelo predice AQI (modelo_aqi.json) en lugar de PM2.5.
+
+    Retorna (banda_efectiva, banda_actual).
+    """
+    banda_actual = aqi_a_banda(aqi_actual)
+    banda_pred   = aqi_a_banda(int(round(aqi_pred)))
+
+    if banda_pred.banda > banda_actual.banda:
+        efectiva = banda_pred
+    else:
+        efectiva = banda_actual
+
+    if confianza == "baja":
+        siguiente_idx = min(int(efectiva.banda) + 1, len(_TABLA_BANDAS) - 1)
+        efectiva = _TABLA_BANDAS[siguiente_idx][1]
+
+    return efectiva, banda_actual

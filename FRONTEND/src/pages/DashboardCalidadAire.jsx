@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Leaf, Droplets, Thermometer, Wind, Cloud, CigaretteOff, Users, Video } from 'lucide-react'
 import MetricCard from '../components/MetricCard'
-import RecCard from '../components/RecCard'
+import IARecomCard from '../components/IARecomCard'
 import TrendChart from '../components/TrendChart'
 import DetailModal from '../components/DetailModal'
 import {
@@ -38,7 +38,7 @@ export default function DashboardCalidadAire({ data, history, theme }) {
         />
       </div>
 
-      <RecCard aqi={data.aqi} />
+      <IARecomCard />
 
       <div className="cards-row row-particles">
         <MetricCard

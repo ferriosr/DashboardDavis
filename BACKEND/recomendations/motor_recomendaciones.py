@@ -17,9 +17,13 @@ Uso desde recomendacion_api.py (FastAPI):
 from __future__ import annotations
 from dataclasses import dataclass, asdict
 from datetime import datetime
+from pathlib import Path
 
 from predictor import PredictorXGBoost, ResultadoPrediccion
-from bandas_nom172 import InfoBanda, banda_preventiva, pm25_a_banda, pm25_a_aqi
+from bandas_nom172 import InfoBanda
+from arbol_clasificador import ClasificadorExplicito, ClasificadorSklearn
+
+_BACKEND_DIR = Path(__file__).resolve().parent.parent
 
 
 # ── Contexto universitario ─────────────────────────────────────────────
@@ -83,7 +87,7 @@ class ContextoUniversidad:
 class Recomendacion:
     # Métricas
     pm25_actual: float
-    pm25_predicho: float
+    aqi_predicho: float
     aqi_estimado: int
 
     # Clasificación
@@ -96,7 +100,7 @@ class Recomendacion:
     # Tendencia
     tendencia: str             # "sube" | "baja" | "estable"
     icono_tendencia: str       # "↑" | "↓" | "→"
-    delta_pm25: float
+    delta_aqi: float
 
     # Confianza del modelo
     confianza_modelo: str      # "alta" | "media" | "baja"
@@ -123,75 +127,30 @@ class Recomendacion:
 class MotorRecomendaciones:
     """
     Singleton recomendado: instanciar una vez, llamar generar() en cada ciclo.
+
+    modo_clasificador:
+      "explicito" (default) — árbol de decisión codificado, sin entrenamiento.
+      "sklearn"             — DecisionTreeClassifier entrenado con datos sintéticos.
     """
 
-    # Horas pico identificadas en el análisis histórico (7–9 AM)
-    HORAS_PICO = {7, 8, 9}
-
     def __init__(self,
-                 ruta_modelo: str = "modelo_humo_escom.json",
-                 ruta_meta:   str = "metadata_humo.json"):
-        self._predictor = PredictorXGBoost(ruta_modelo, ruta_meta)
+                 ruta_modelo:         str | None = None,
+                 ruta_features:       str | None = None,
+                 modo_clasificador:   str = "explicito",
+                 ruta_arbol:          str | None = None,
+                 **_ignorados):
+        if ruta_modelo is None:
+            ruta_modelo = str(_BACKEND_DIR / "modelo_aqi.json")
+        if ruta_features is None:
+            ruta_features = str(_BACKEND_DIR / "features.json")
+        if ruta_arbol is None:
+            ruta_arbol = str(_BACKEND_DIR / "arbol_modelo.pkl")
+        self._predictor = PredictorXGBoost(ruta_modelo, ruta_features)
 
-    # ── Pesos adaptativos según driver ─────────────────────────────────
-    _PESOS_BASE = {
-        "w_actual":    0.40,
-        "w_pred":      0.35,
-        "w_tendencia": 0.15,
-        "w_contexto":  0.10,
-    }
-
-    def _ajustar_pesos(self, driver: str) -> dict:
-        pesos = dict(self._PESOS_BASE)
-        # Si el modelo dice que PM2.5 / PM10 son el driver,
-        # le damos más peso a la predicción directa.
-        if "pm25" in driver or "pm10" in driver:
-            pesos["w_pred"] += 0.10
-            pesos["w_actual"] -= 0.05
-            pesos["w_contexto"] -= 0.05
-        elif "hour" in driver or "day" in driver:
-            # El ciclo horario domina → contexto más relevante
-            pesos["w_contexto"] += 0.08
-            pesos["w_tendencia"] -= 0.08
-        return pesos
-
-    # ── Penalización contextual ─────────────────────────────────────────
-    def _penalizacion_contexto(self, ctx: ContextoUniversidad) -> tuple[float, str]:
-        """
-        Retorna (multiplicador_score, descripcion).
-        Multiplicador > 1 sube el nivel de urgencia.
-        Integra datos de cámara: humo de tabaco y conteo de personas.
-        """
-        if ctx.es_receso:
-            mult, desc = 0.85, "receso académico — actividad reducida"
-        elif ctx.hora in self.HORAS_PICO and not ctx.es_receso:
-            if ctx.es_cambio_clase:
-                mult, desc = 1.20, "hora pico + cambio de clase — máxima exposición"
-            else:
-                mult, desc = 1.12, "hora pico matutina"
-        elif ctx.es_cambio_clase:
-            mult, desc = 1.08, "cambio de clase — tránsito de personas"
-        elif ctx.dia_semana >= 5:
-            mult, desc = 0.90, "fin de semana — actividad baja"
+        if modo_clasificador == "sklearn":
+            self._clasificador = ClasificadorSklearn(ruta_arbol)
         else:
-            mult, desc = 1.0, "horario normal"
-
-        # Cámara: humo de tabaco (+0.20 — fuente directa confirmada)
-        if ctx.humo_detectado:
-            mult = min(mult + 0.20, 1.50)
-            desc += " · humo de tabaco detectado por cámara"
-
-        # Cámara: ocupación
-        if ctx.personas_detectadas >= 30:
-            mult = min(mult + 0.10, 1.50)
-            desc += f" · alta ocupación ({ctx.personas_detectadas} personas)"
-        elif ctx.personas_detectadas >= 15:
-            mult = min(mult + 0.05, 1.50)
-            desc += f" · ocupación moderada ({ctx.personas_detectadas} personas)"
-        elif ctx.personas_detectadas > 0:
-            desc += f" · {ctx.personas_detectadas} personas"
-
-        return mult, desc
+            self._clasificador = ClasificadorExplicito()
 
     # ── Generación de mensajes ──────────────────────────────────────────
     _MENSAJES_GENERAL: dict[str, dict] = {
@@ -227,19 +186,19 @@ class MotorRecomendaciones:
             banda.nombre,
             {"msg": "Monitorear condiciones.", "expuesto": "Precaución adicional recomendada."}
         )
-        sufijo = ""
+        sufijo_tendencia = ""
         if tendencia == "sube":
-            sufijo = " La tendencia indica que la calidad puede empeorar en los próximos 15 min."
+            sufijo_tendencia = " La tendencia indica que la calidad puede empeorar en los próximos 15 min."
         elif tendencia == "baja":
-            sufijo = " Se espera mejora en los próximos 15 min."
+            sufijo_tendencia = " Se espera mejora en los próximos 15 min."
 
+        sufijo_general = sufijo_tendencia
         if "pm25" in driver or "pm10" in driver:
-            sufijo += " Niveles de partículas finas son el factor determinante."
-
+            sufijo_general += " Niveles de partículas finas son el factor determinante."
         if "humo de tabaco" in ctx_desc:
-            sufijo += " Fuente de humo de tabaco identificada por cámara — alejarse del área afectada."
+            sufijo_general += " Fuente de humo de tabaco identificada por cámara — alejarse del área afectada."
 
-        return base["msg"] + sufijo, base["expuesto"] + sufijo
+        return base["msg"] + sufijo_general, base["expuesto"] + sufijo_tendencia
 
     # ── Fallback sin predicción ─────────────────────────────────────────
     def _generar_sin_prediccion(self,
@@ -251,19 +210,19 @@ class MotorRecomendaciones:
         para ejecutar el modelo XGBoost.
         """
         actual = historial_15min[-1]
-        pm25_act = actual["pm25"]
 
-        banda_actual = pm25_a_banda(pm25_act)
-        _, ctx_desc = self._penalizacion_contexto(contexto)
+        banda_actual, ctx_desc = self._clasificador.clasificar(
+            actual["aqi"], actual["aqi"], "estable", contexto
+        )
 
         msg_general, msg_expuesto = self._generar_mensajes(
             banda_actual, "estable", "sin modelo", ctx_desc
         )
 
         return Recomendacion(
-            pm25_actual=round(pm25_act, 2),
-            pm25_predicho=round(pm25_act, 2),
-            aqi_estimado=pm25_a_aqi(pm25_act),
+            pm25_actual=round(actual["pm25"], 2),
+            aqi_predicho=round(actual["pm25"], 2),
+            aqi_estimado=actual["aqi"],
 
             banda_nombre=banda_actual.nombre,
             banda_nivel=int(banda_actual.banda),
@@ -273,7 +232,7 @@ class MotorRecomendaciones:
 
             tendencia="estable",
             icono_tendencia="→",
-            delta_pm25=0.0,
+            delta_aqi=0.0,
 
             confianza_modelo="sin modelo",
             feature_driver="sin modelo",
@@ -301,12 +260,12 @@ class MotorRecomendaciones:
         contexto: si None, se infiere desde el último timestamp.
 
         Flujo:
-          - >= 4 registros → predicción XGBoost completa
-          - 1–3 registros  → fallback sin predicción (solo PM2.5 actual)
-          - 0 registros    → ValueError
+          - >= 12 registros → predicción XGBoost completa (AQI T+60)
+          - 1–11 registros  → fallback sin predicción (solo PM2.5 actual)
+          - 0 registros     → ValueError
         """
         if len(historial_15min) < 1:
-            raise ValueError("Se necesita al menos 1 registro de 15 min.")
+            raise ValueError("Se necesita al menos 1 registro de 5 min.")
 
         actual = historial_15min[-1]
 
@@ -315,48 +274,31 @@ class MotorRecomendaciones:
             contexto = ContextoUniversidad.desde_datetime(actual["ts"])
 
         # Fallback cuando no hay historial suficiente para el modelo
-        if len(historial_15min) < 4:
+        if len(historial_15min) < PredictorXGBoost.MAX_HISTORIAL:
             return self._generar_sin_prediccion(historial_15min, contexto)
 
-        # 1. Predicción XGBoost
+        # 1. Predicción XGBoost — AQI en T+60
         pred: ResultadoPrediccion = self._predictor.predict(historial_15min)
 
-        # 2. Banda preventiva worst-case
-        banda_efectiva, banda_solo_actual = banda_preventiva(
-            pm25_actual=actual["pm25"],
-            pm25_pred=pred.pm25_pred,
-            confianza=pred.confianza,
+        # 2. Clasificación con árbol de decisión (worst-case + contexto)
+        banda_efectiva, ctx_desc = self._clasificador.clasificar(
+            actual["aqi"], pred.aqi_pred, pred.tendencia, contexto
         )
+        banda_solo_actual = self._clasificador.clasificar(
+            actual["aqi"], actual["aqi"], "estable", contexto
+        )[0]
 
-        # 3. Pesos adaptativos según driver
-        pesos = self._ajustar_pesos(pred.driver)
-
-        # 4. Penalización contextual
-        mult_ctx, ctx_desc = self._penalizacion_contexto(contexto)
-
-        # 5. Score compuesto (interno, para posible ajuste fino futuro)
-        #    Aquí ya está implícito en banda_efectiva + ajuste por confianza,
-        #    pero lo calculamos explícitamente para metadata/logging.
-        _score = (
-            pesos["w_actual"]    * (actual["pm25"] / 225.5)   # normalizado
-            + pesos["w_pred"]    * (pred.pm25_pred / 225.5)
-            + pesos["w_tendencia"] * max(0, pred.delta / 100)
-            + pesos["w_contexto"] * (mult_ctx - 1.0)
-        ) * mult_ctx  # noqa — disponible para logging externo
-
-        # 6. Icono tendencia
+        # 3. Mensajes
         iconos = {"sube": "↑", "baja": "↓", "estable": "→"}
-
-        # 7. Mensajes
         msg_general, msg_expuesto = self._generar_mensajes(
             banda_efectiva, pred.tendencia, pred.driver, ctx_desc
         )
 
-        aqi_est = pm25_a_aqi(max(actual["pm25"], pred.pm25_pred))
+        aqi_est = max(actual["aqi"], int(round(pred.aqi_pred)))
 
         return Recomendacion(
             pm25_actual=round(actual["pm25"], 2),
-            pm25_predicho=pred.pm25_pred,
+            aqi_predicho=round(actual["pm25"], 2),
             aqi_estimado=aqi_est,
 
             banda_nombre=banda_efectiva.nombre,
@@ -367,7 +309,7 @@ class MotorRecomendaciones:
 
             tendencia=pred.tendencia,
             icono_tendencia=iconos[pred.tendencia],
-            delta_pm25=pred.delta,
+            delta_aqi=pred.delta,
 
             confianza_modelo=pred.confianza,
             feature_driver=pred.driver,

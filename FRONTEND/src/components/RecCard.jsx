@@ -27,7 +27,7 @@ function fallbackFromAqi(aqi) {
 
 // Suma 60 min al timestamp "2026-05-08 15:18:00" → "08/05 16:18"
 function calcularHoraPredicha(ts) {
-  const iso = ts.replace(' ', 'T') + (ts.includes('+') || ts.endsWith('Z') ? '' : 'Z')
+  const iso = ts.replace(' ', 'T')
   const d = new Date(iso)
   d.setMinutes(d.getMinutes() + 60)
   const hh = String(d.getHours()).padStart(2, '0')
@@ -115,17 +115,17 @@ export default function RecCard({ aqi }) {
   // ── Render con datos del servidor de recomendaciones ─────────
   if (rec) {
     const iconoTendencia = rec.icono_tendencia ?? '→'
-    const delta = rec.delta_pm25 != null ? rec.delta_pm25.toFixed(1) : null
+    const delta = rec.delta_aqi != null ? rec.delta_aqi.toFixed(1) : null
 
     return (
       <div className="rec-card" style={{ background: bg, borderColor: `${color}33` }}>
         <div className="rec-icon"><Megaphone size={22} /></div>
         <div className="rec-body">
           <div className="rec-label" style={{ color }}>
-            Recomendación · {rec.banda_nombre}
+            Recomendación
             {delta !== null && (
               <span className="rec-tendencia" style={{ color }}>
-                {iconoTendencia} {delta > 0 ? '+' : ''}{delta} µg/m³
+                {iconoTendencia} {delta > 0 ? '+' : ''}{delta} AQI
               </span>
             )}
           </div>
