@@ -72,53 +72,45 @@ export default function DashboardCalidadAire({ data, history, theme, cameraOnlin
       <div className="cards-row row-alerts">
         {cameraOnline ? (
           <>
-            <div className="card card-success">
-              <div className="card-content">
-                <div className="card-title">Humo</div>
-                <div className="card-subtitle">De Tabaco</div>
-                <div className="card-value" style={{ color: detecciones.cigarro ? '#e74c3c' : '#2ecc71' }}>
-                  {detecciones.cigarro ? 'SÍ' : 'NO'}
-                </div>
-                <div className={`card-badge ${detecciones.cigarro ? 'badge-danger' : 'badge-success'}`}>
-                  {detecciones.cigarro ? 'Detectado' : 'No detectado'}
-                </div>
-              </div>
-              <div className="card-emoji"><CigaretteOff size={44} /></div>
-            </div>
-            <div className="card card-success">
-              <div className="card-content">
-                <div className="card-title">Personas</div>
-                <div className="card-subtitle">Ocupación</div>
-                <div className="card-value" style={{ color: 'var(--blue)' }}>
-                  {detecciones.personas} <span className="card-value-sub">Detectadas</span>
-                </div>
-                <div className="card-badge badge-success">En Vivo</div>
-              </div>
-              <div className="card-emoji"><Users size={44} /></div>
-            </div>
+            <MetricCard
+              title="Humo"
+              subtitle="De Tabaco"
+              value={detecciones.cigarro ? 'SÍ' : 'NO'}
+              unit=""
+              color={detecciones.cigarro ? '#e74c3c' : '#2ecc71'}
+              badge={detecciones.cigarro ? 'Detectado' : 'No detectado'}
+              icon={<CigaretteOff size={44} />}
+            />
+            <MetricCard
+              title="Personas"
+              subtitle="Ocupación"
+              value={detecciones.personas}
+              unit=" Det."
+              color="#2D62ED"
+              badge="En Vivo"
+              icon={<Users size={44} />}
+            />
           </>
         ) : (
           <>
-            <div className="card card-muted">
-              <div className="card-content">
-                <div className="card-title">Humo</div>
-                <div className="card-subtitle">De Tabaco</div>
-                <div className="card-value" style={{ color: 'var(--text-muted)' }}>--</div>
-                <div className="card-badge badge-muted">Sin Conexión</div>
-              </div>
-              <div className="card-emoji"><CigaretteOff size={44} /></div>
-            </div>
-            <div className="card card-muted">
-              <div className="card-content">
-                <div className="card-title">Personas</div>
-                <div className="card-subtitle">Ocupación</div>
-                <div className="card-value" style={{ color: 'var(--text-muted)' }}>
-                  -- <span className="card-value-sub">Detectadas</span>
-                </div>
-                <div className="card-badge badge-muted">Sin Conexión</div>
-              </div>
-              <div className="card-emoji"><Users size={44} /></div>
-            </div>
+            <MetricCard
+              title="Humo"
+              subtitle="De Tabaco"
+              value="--"
+              unit=""
+              color="#B2BEC3"
+              badge="Sin Conexión"
+              icon={<CigaretteOff size={44} />}
+            />
+            <MetricCard
+              title="Personas"
+              subtitle="Ocupación"
+              value="--"
+              unit=""
+              color="#B2BEC3"
+              badge="Sin Conexión"
+              icon={<Users size={44} />}
+            />
           </>
         )}
       </div>
@@ -161,3 +153,4 @@ export default function DashboardCalidadAire({ data, history, theme, cameraOnlin
     </>
   )
 }
+  

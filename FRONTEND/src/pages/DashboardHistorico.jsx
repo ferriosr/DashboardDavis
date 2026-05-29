@@ -131,12 +131,13 @@ export default function DashboardHistorico({ theme }) {
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState(null)
 
-  // period state — shared across all charts
+  // period state — shared across all charts (default: last 30 days)
   const today = todayStr()
-  const [pendingFrom, setPendingFrom] = useState('')
-  const [pendingTo,   setPendingTo]   = useState('')
-  const [appliedFrom, setAppliedFrom] = useState('')
-  const [appliedTo,   setAppliedTo]   = useState('')
+  const defaultFrom = daysAgoStr(30)
+  const [pendingFrom, setPendingFrom] = useState(defaultFrom)
+  const [pendingTo,   setPendingTo]   = useState(today)
+  const [appliedFrom, setAppliedFrom] = useState(defaultFrom)
+  const [appliedTo,   setAppliedTo]   = useState(today)
 
   const monthlyAQIRef = useRef(null)
   const hourlyRef     = useRef(null)
@@ -156,7 +157,7 @@ export default function DashboardHistorico({ theme }) {
       .catch(e => { setError(e.message); setLoading(false) })
   }
 
-  useEffect(() => { fetchStats(appliedFrom, appliedTo) }, [])  // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchStats(defaultFrom, today) }, [])  // eslint-disable-line react-hooks/exhaustive-deps
 
   function apply() {
     setAppliedFrom(pendingFrom)
@@ -634,6 +635,6 @@ export default function DashboardHistorico({ theme }) {
           <div className="hist-footer-text" style={{ marginLeft: 8 }}>Generado con datos históricos del sensor Davis</div>
         </div>
       </div>
-    </div>
+    </div>  
   )
 }

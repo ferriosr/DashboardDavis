@@ -36,14 +36,14 @@ app.use((_req, res, next) => {
   next()
 })
 
-async function supabaseFetch(path) {
+async function supabaseFetch(path, timeoutMs = 30000) {
   const res = await fetch(path, {
     headers: {
       apikey: SUPABASE_KEY,
       Authorization: `Bearer ${SUPABASE_KEY}`,
       Accept: 'application/json',
     },
-    signal: AbortSignal.timeout(10000),
+    signal: AbortSignal.timeout(timeoutMs),
   })
   if (!res.ok) throw new Error(`Supabase ${res.status}`)
   return res.json()
@@ -57,11 +57,23 @@ async function supabaseCount(path) {
       Accept: 'application/json',
       Prefer: 'count=exact',
     },
-    signal: AbortSignal.timeout(10000),
+    signal: AbortSignal.timeout(30000),
   })
   if (!res.ok) throw new Error(`Supabase count ${res.status}`)
   const range = res.headers.get('content-range') // e.g. "0-0/42318"
   return parseInt(range?.split('/')[1] ?? '0', 10)
+}
+
+async function fetchInChunks(urls, concurrency = 4) {
+  const results = []
+  for (let i = 0; i < urls.length; i += concurrency) {
+    const chunk = urls.slice(i, i + concurrency)
+    const settled = await Promise.allSettled(chunk.map(url => supabaseFetch(url)))
+    for (const s of settled) {
+      results.push(s.status === 'fulfilled' ? s.value : [])
+    }
+  }
+  return results
 }
 
 function runPythonPrediction(features) {
@@ -521,31 +533,32 @@ app.get('/api/davis', async (req, res) => {
       const fromDate = req.query.from
       const toDate   = req.query.to
 
-      const allRows = []
       const batchSize = 1000
-      let offset = 0
-      while (true) {
-        let url =
-          `${SUPABASE_URL}/rest/v1/lecturas_davis` +
-          `?select=hora_sensor_utc,aqi,pm1,pm2_5,pm10,temperatura,humedad` +
-          `&order=hora_sensor_utc.asc`
-        if (fromDate) url += `&hora_sensor_utc=gte.${encodeURIComponent(fromDate + ' 00:00:00')}`
-        if (toDate)   url += `&hora_sensor_utc=lte.${encodeURIComponent(toDate + ' 23:59:59')}`
-        url += `&limit=${batchSize}&offset=${offset}`
-        const rows = await supabaseFetch(url)
-        if (!rows?.length) break
-        allRows.push(...rows)
-        if (rows.length < batchSize) break
-        offset += batchSize
-      }
+
+      let baseParams = `?select=hora_sensor_utc,aqi,pm1,pm2_5,pm10,temperatura,humedad&order=hora_sensor_utc.asc`
+      if (fromDate) baseParams += `&hora_sensor_utc=gte.${encodeURIComponent(fromDate + ' 00:00:00')}`
+      if (toDate)   baseParams += `&hora_sensor_utc=lte.${encodeURIComponent(toDate + ' 23:59:59')}`
+
+      const baseUrl = `${SUPABASE_URL}/rest/v1/lecturas_davis${baseParams}`
+      const totalCount = await supabaseCount(baseUrl)
+
+      const offsets = []
+      for (let o = 0; o < Math.max(totalCount, 1); o += batchSize) offsets.push(o)
+
+      const urls = offsets.map(offset => `${baseUrl}&limit=${batchSize}&offset=${offset}`)
+      const batches = await fetchInChunks(urls)
 
       const seen = new Set()
-      const uniqueRows = allRows.filter(r => {
-        if (seen.has(r.hora_sensor_utc)) return false
-        seen.add(r.hora_sensor_utc)
-        return true
-      })
-      allRows.length = 0; allRows.push(...uniqueRows)
+      const allRows = []
+      for (const batch of batches) {
+        if (!batch?.length) continue
+        for (const r of batch) {
+          if (!seen.has(r.hora_sensor_utc)) {
+            seen.add(r.hora_sensor_utc)
+            allRows.push(r)
+          }
+        }
+      }
 
       const avg = arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0
       const monthlyMap = {}
@@ -599,30 +612,42 @@ app.get('/api/davis', async (req, res) => {
         pm25: hourlyMap[h] ? +avg(hourlyMap[h].pm25).toFixed(1) : 0,
       }))
 
-      const allAqi  = allRows.map(r => parseFloat(r.aqi) || 0)
-      const allPm25 = allRows.map(r => parseFloat(r.pm2_5) || 0)
-      const allPm10 = allRows.map(r => parseFloat(r.pm10) || 0)
+      let sumAqi = 0, sumPm25 = 0, sumPm10 = 0, sumTemp = 0, sumHum = 0
+      let maxPm25 = 0, maxPm10 = 0
+      for (const r of allRows) {
+        const a = parseFloat(r.aqi) || 0
+        const p25 = parseFloat(r.pm2_5) || 0
+        const p10 = parseFloat(r.pm10) || 0
+        sumAqi  += a
+        sumPm25 += p25
+        sumPm10 += p10
+        sumTemp += parseFloat(r.temperatura) || 0
+        sumHum  += parseFloat(r.humedad) || 0
+        if (p25 > maxPm25) maxPm25 = p25
+        if (p10 > maxPm10) maxPm10 = p10
+      }
+      const n = allRows.length || 1
 
       return res.json({
         total,
         monthly,
         hourly,
         distribution: {
-          good:         pct(dist.good),
-          moderate:     pct(dist.moderate),
-          usg:          pct(dist.usg),
-          unhealthy:    pct(dist.unhealthy),
+          good:          pct(dist.good),
+          moderate:      pct(dist.moderate),
+          usg:           pct(dist.usg),
+          unhealthy:     pct(dist.unhealthy),
           veryUnhealthy: pct(dist.veryUnhealthy),
-          hazardous:    pct(dist.hazardous),
+          hazardous:     pct(dist.hazardous),
         },
         overallAvg: {
-          aqi:    +avg(allAqi).toFixed(1),
-          pm25:   +avg(allPm25).toFixed(1),
-          pm10:   +avg(allPm10).toFixed(1),
-          temp:   +avg(allRows.map(r => parseFloat(r.temperatura) || 0)).toFixed(1),
-          hum:    +avg(allRows.map(r => parseFloat(r.humedad) || 0)).toFixed(1),
-          maxPm25: allPm25.length ? +Math.max(...allPm25).toFixed(0) : 0,
-          maxPm10: allPm10.length ? +Math.max(...allPm10).toFixed(0) : 0,
+          aqi:    +(sumAqi  / n).toFixed(1),
+          pm25:   +(sumPm25 / n).toFixed(1),
+          pm10:   +(sumPm10 / n).toFixed(1),
+          temp:   +(sumTemp / n).toFixed(1),
+          hum:    +(sumHum  / n).toFixed(1),
+          maxPm25: +maxPm25.toFixed(0),
+          maxPm10: +maxPm10.toFixed(0),
         },
       })
     }
@@ -653,12 +678,11 @@ app.get('/api/davis', async (req, res) => {
       const offsets = []
       for (let o = 0; o < Math.max(totalCount, 1); o += batchSize) offsets.push(o)
 
-      const batches = await Promise.all(offsets.map(offset =>
-        supabaseFetch(
-          `${SUPABASE_URL}/rest/v1/lecturas_davis${baseParams}` +
-          `&order=hora_sensor_utc.asc&limit=${batchSize}&offset=${offset}`
-        )
-      ))
+      const heatmapUrls = offsets.map(offset =>
+        `${SUPABASE_URL}/rest/v1/lecturas_davis${baseParams}` +
+        `&order=hora_sensor_utc.asc&limit=${batchSize}&offset=${offset}`
+      )
+      const batches = await fetchInChunks(heatmapUrls)
 
       // 3. Unir y deduplicar
       const seen = new Set()
@@ -780,15 +804,25 @@ function getContextoEscom(hora, minuto, dia) {
   const RECESOS = [[10 * 60, 10 * 60 + 30], [18 * 60, 18 * 60 + 30]]
   const CAMBIOS = [7 * 60, 8 * 60 + 30, 10 * 60 + 30, 12 * 60, 13 * 60 + 30, 15 * 60, 16 * 60 + 30, 18 * 60 + 30, 20 * 60]
 
-  if (dia >= 5) return { descripcion: 'Fin de semana — actividad reducida en campus', esReceso: false, esCambio: false }
-  if (hora < 7)  return { descripcion: 'Campus cerrado — horas de madrugada', esReceso: false, esCambio: false }
+  if (dia >= 5) return { descripcion: 'Fin de semana — actividad reducida en escuela|', esReceso: false, esCambio: false }
+  if (hora < 7)  return { descripcion: 'Escuela cerrada — horas de madrugada', esReceso: false, esCambio: false }
   if (hora >= 21) return { descripcion: 'Fin de jornada académica', esReceso: false, esCambio: false }
 
   const esReceso = RECESOS.some(([ini, fin]) => totalMin >= ini && totalMin < fin)
   if (esReceso) return { descripcion: 'Hora de receso — estudiantes en exteriores del campus', esReceso: true, esCambio: false }
 
   const esCambio = CAMBIOS.some(c => Math.abs(totalMin - c) <= 5)
-  if (esCambio) return { descripcion: 'Cambio de clase — alto tránsito por pasillos y patios', esReceso: false, esCambio: true }
+  if (esCambio) {
+    const esNocturno = hora >= 18
+    return {
+      descripcion: esNocturno
+        ? 'Cambio de clase nocturno — actividad baja en campus'
+        : 'Cambio de clase — alto tránsito por pasillos y patios',
+      esReceso: false,
+      esCambio: true,
+      esNocturno,
+    }
+  }
 
   if (hora >= 7 && hora <= 9) return { descripcion: 'Hora pico matutina — alta afluencia al campus', esReceso: false, esCambio: false }
   if (hora >= 12 && hora <= 13) return { descripcion: 'Horario de comida — estudiantes posiblemente en exteriores', esReceso: false, esCambio: false }
@@ -825,10 +859,12 @@ function buildGeminiPrompt(ultima, historial, ctx) {
 
   const systemInstruction = `Experto en calidad del aire para escuela ESCOM-IPN Isla de Datos Urbanos, CDMX. Responde SOLO con JSON válido en español, sin markdown.
 Estructura exacta:
-{"resumen":"<1 oración>","nivel_riesgo":"bajo|moderado|alto|muy_alto","emoji_estado":"<emoji>","recomendaciones_generales":["<máx 2 oraciones>","..."],"recomendaciones_grupos_sensibles":["<asma/EPOC/adultos mayores>"],"acciones_inmediatas":[],"mensaje_contexto":"<contexto horario campus>"}`
+{"resumen":"<1 oración>","nivel_riesgo":"bajo|moderado|alto|muy_alto","recomendaciones_generales":["<máx 2 oraciones>","..."],"recomendaciones_grupos_sensibles":["<asma/EPOC/adultos mayores>"],"acciones_inmediatas":[],"mensaje_contexto":"<contexto horario campus>"}`
 
   const receso = ctx.escom.esReceso ? ' RECESO: estudiantes en exteriores.' : ''
-  const cambio = ctx.escom.esCambio ? ' CAMBIO DE CLASE: alto tránsito.' : ''
+  const cambio = ctx.escom.esCambio
+    ? (ctx.escom.esNocturno ? ' CAMBIO DE CLASE NOCTURNO: pocos estudiantes en campus.' : ' CAMBIO DE CLASE: alto tránsito.')
+    : ''
   const humo = ctx.humo ? ' HUMO detectado por cámara.' : ''
 
   const userMessage = `ESCOM IPN | ${diaStr} ${hora}:${String(minuto).padStart(2, '0')}h | ${ctx.escom.descripcion}${receso}${cambio}${humo}
@@ -840,14 +876,41 @@ Genera recomendaciones. "acciones_inmediatas":[] si nivel no es alto/muy_alto.`
   return { systemInstruction, userMessage }
 }
 
+function escapeNewlinesInStrings(jsonStr) {
+  let result = ''
+  let inString = false
+  let escaped = false
+  for (let i = 0; i < jsonStr.length; i++) {
+    const ch = jsonStr[i]
+    if (escaped) { result += ch; escaped = false; continue }
+    if (ch === '\\' && inString) { result += ch; escaped = true; continue }
+    if (ch === '"') { inString = !inString; result += ch; continue }
+    if (inString && (ch === '\n' || ch === '\r')) { result += '\\n'; continue }
+    result += ch
+  }
+  return result
+}
+
 function parseGeminiJSON(text) {
-  return JSON.parse(
-    text.trim()
-      .replace(/^```json\s*/i, '')
-      .replace(/^```\s*/i, '')
-      .replace(/```\s*$/i, '')
-      .trim()
-  )
+  const clean = text.trim()
+    .replace(/^```json\s*/i, '')
+    .replace(/^```\s*/i, '')
+    .replace(/```\s*$/i, '')
+    .trim()
+
+  // Direct parse first
+  try { return JSON.parse(clean) } catch {}
+
+  // Fix literal newlines inside strings and retry
+  try { return JSON.parse(escapeNewlinesInStrings(clean)) } catch {}
+
+  // Extract first {...} block, fix newlines, retry
+  const match = clean.match(/\{[\s\S]*\}/)
+  if (match) {
+    try { return JSON.parse(escapeNewlinesInStrings(match[0])) } catch {}
+  }
+
+  throw new Error(`JSON inválido en respuesta de Gemini: ${clean.slice(0, 120)}`)
 }
 
 async function fetchGeminiWithRetry(body, maxRetries = 3) {
@@ -954,13 +1017,19 @@ app.get('/api/ia/recomendacion', async (req, res) => {
           contents: [{ role: 'user', parts: [{ text: userMessage }] }],
           generationConfig: {
             temperature: 0.3,
-            maxOutputTokens: 512,
+            maxOutputTokens: 1024,
             responseMimeType: 'application/json',
+            thinkingConfig: { thinkingBudget: 0 },
           },
         })
 
         const geminiData = await geminiRes.json()
-        const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text
+        const candidate = geminiData.candidates?.[0]
+        const finishReason = candidate?.finishReason
+        const rawText = candidate?.content?.parts?.[0]?.text
+        if (finishReason === 'MAX_TOKENS') {
+          throw new Error(`Gemini cortó la respuesta por límite de tokens (MAX_TOKENS). rawText: ${JSON.stringify(rawText?.slice(0, 200))}`)
+        }
         if (!rawText) throw new Error('Gemini no retornó contenido en la respuesta')
 
         const iaRec = parseGeminiJSON(rawText)

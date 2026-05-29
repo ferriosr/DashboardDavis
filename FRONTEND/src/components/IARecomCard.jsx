@@ -70,11 +70,11 @@ export default function IARecomCard() {
               textTransform: 'uppercase', fontFamily: 'DM Mono, monospace',
               color: data ? style.color : 'var(--text-muted)',
             }}>
-              {data?.fuente === 'arbol' ? 'Recomendación · Modelo local' : 'Recomendación IA · Gemini'}
+              {'Recomendación'}
             </span>
             {data?.fromCache && (
               <span style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: 'DM Mono, monospace' }}>
-                · caché
+                
               </span>
             )}
           </div>
@@ -206,3 +206,4 @@ export default function IARecomCard() {
     </>
   )
 }
+ 
