@@ -804,19 +804,19 @@ function getContextoEscom(hora, minuto, dia) {
   const RECESOS = [[10 * 60, 10 * 60 + 30], [18 * 60, 18 * 60 + 30]]
   const CAMBIOS = [7 * 60, 8 * 60 + 30, 10 * 60 + 30, 12 * 60, 13 * 60 + 30, 15 * 60, 16 * 60 + 30, 18 * 60 + 30, 20 * 60]
 
-  if (dia >= 5) return { descripcion: 'Fin de semana — actividad reducida en escuela|', esReceso: false, esCambio: false }
+  if (dia >= 5) return { descripcion: 'Fin de semana — actividad muy baja en escuela|', esReceso: false, esCambio: false }
   if (hora < 7)  return { descripcion: 'Escuela cerrada — horas de madrugada', esReceso: false, esCambio: false }
   if (hora >= 21) return { descripcion: 'Fin de jornada académica', esReceso: false, esCambio: false }
 
   const esReceso = RECESOS.some(([ini, fin]) => totalMin >= ini && totalMin < fin)
-  if (esReceso) return { descripcion: 'Hora de receso — estudiantes en exteriores del campus', esReceso: true, esCambio: false }
+  if (esReceso) return { descripcion: 'Hora de receso — estudiantes en exteriores del escuela', esReceso: true, esCambio: false }
 
   const esCambio = CAMBIOS.some(c => Math.abs(totalMin - c) <= 5)
   if (esCambio) {
     const esNocturno = hora >= 18
     return {
       descripcion: esNocturno
-        ? 'Cambio de clase nocturno — actividad baja en campus'
+        ? 'Cambio de clase nocturno — actividad baja en escuela'
         : 'Cambio de clase — alto tránsito por pasillos y patios',
       esReceso: false,
       esCambio: true,
@@ -824,7 +824,7 @@ function getContextoEscom(hora, minuto, dia) {
     }
   }
 
-  if (hora >= 7 && hora <= 9) return { descripcion: 'Hora pico matutina — alta afluencia al campus', esReceso: false, esCambio: false }
+  if (hora >= 7 && hora <= 9) return { descripcion: 'Hora pico matutina — alta afluencia en escuela', esReceso: false, esCambio: false }
   if (hora >= 12 && hora <= 13) return { descripcion: 'Horario de comida — estudiantes posiblemente en exteriores', esReceso: false, esCambio: false }
   return { descripcion: 'Horario de clases normal — estudiantes principalmente en aulas', esReceso: false, esCambio: false }
 }
