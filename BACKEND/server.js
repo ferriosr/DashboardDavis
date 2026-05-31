@@ -867,9 +867,13 @@ Estructura exacta:
     : ''
   const humo = ctx.humo ? ' HUMO detectado por cámara.' : ''
 
+  const predStr = ctx.aqiPrediccion !== null && ctx.aqiPrediccion !== undefined
+    ? ` | Predicción AQI +1h: ${ctx.aqiPrediccion}`
+    : ''
+
   const userMessage = `ESCOM IPN | ${diaStr} ${hora}:${String(minuto).padStart(2, '0')}h | ${ctx.escom.descripcion}${receso}${cambio}${humo}
 AQI:${aqi}(${bandaNOM}) PM2.5:${pm25}µg/m³ PM10:${pm10}µg/m³ Temp:${temp}°C Hum:${hum}%
-Tendencia:${tendencia}(Δ${deltaAqi > 0 ? '+' : ''}${deltaAqi}) | Historial(AQI): ${historial.slice(0, 4).map(r => Math.round(parseFloat(r.aqi))).join('→')}
+Tendencia:${tendencia}(Δ${deltaAqi > 0 ? '+' : ''}${deltaAqi}) | Historial(AQI): ${historial.slice(0, 4).map(r => Math.round(parseFloat(r.aqi))).join('→')}${predStr}
 ${ctx.personas > 0 ? `Personas exterior: ${ctx.personas}` : ''}
 Genera recomendaciones. "acciones_inmediatas":[] si nivel no es alto/muy_alto.`
 
@@ -1009,7 +1013,28 @@ app.get('/api/ia/recomendacion', async (req, res) => {
 
     if (GEMINI_API_KEY) {
       try {
-        const ctx = { tiempo: { hora, minuto, dia }, escom, personas: 0, humo: false }
+        let aqiPrediccion = null
+        try {
+          const predRes = await fetch('http://127.0.0.1:5000/predecir', { signal: AbortSignal.timeout(5000) })
+          if (predRes.ok) {
+            const predData = await predRes.json()
+            aqiPrediccion = predData.aqi_predicho ?? null
+            if (aqiPrediccion !== null) aqiPrediccion = Math.round(parseFloat(aqiPrediccion))
+          }
+        } catch { /* Python no disponible — continuar sin predicción */ }
+
+        let personas = 0
+        let humo = false
+        try {
+          const camRes = await fetch('http://192.168.100.180:5000/status', { signal: AbortSignal.timeout(3000) })
+          if (camRes.ok) {
+            const camData = await camRes.json()
+            personas = camData.personas ?? 0
+            humo = camData.hay_cigarro ?? false
+          }
+        } catch { /* Cámara no disponible — continuar sin datos de visión */ }
+
+        const ctx = { tiempo: { hora, minuto, dia }, escom, personas, humo, aqiPrediccion }
         const { systemInstruction, userMessage } = buildGeminiPrompt(ultima, rows, ctx)
 
         const geminiRes = await fetchGeminiWithRetry({
