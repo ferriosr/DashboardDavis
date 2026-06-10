@@ -36,7 +36,7 @@ app.use((_req, res, next) => {
   next()
 })
 
-async function supabaseFetch(path, timeoutMs = 90000) {
+async function supabaseFetch(path, timeoutMs = 30000) {
   const res = await fetch(path, {
     headers: {
       apikey: SUPABASE_KEY,
@@ -75,8 +75,6 @@ async function fetchInChunks(urls, concurrency = 4) {
   }
   return results
 }
-
-
 
 function runPythonPrediction(features) {
   return new Promise((resolve, reject) => {
@@ -805,17 +803,27 @@ function getContextoEscom(hora, minuto, dia) {
   const RECESOS = [[10 * 60, 10 * 60 + 30], [18 * 60, 18 * 60 + 30]]
   const CAMBIOS = [7 * 60, 8 * 60 + 30, 10 * 60 + 30, 12 * 60, 13 * 60 + 30, 15 * 60, 16 * 60 + 30, 18 * 60 + 30, 20 * 60]
 
-  if (dia >= 5) return { descripcion: 'Fin de semana — actividad baja o nula en la escuela', esReceso: false, esCambio: false }
-  if (hora < 7)  return { descripcion: 'Campus cerrado — horas de madrugada', esReceso: false, esCambio: false }
+  if (dia >= 5) return { descripcion: 'Fin de semana — actividad muy baja en escuela|', esReceso: false, esCambio: false }
+  if (hora < 7)  return { descripcion: 'Escuela cerrada — horas de madrugada', esReceso: false, esCambio: false }
   if (hora >= 21) return { descripcion: 'Fin de jornada académica', esReceso: false, esCambio: false }
 
   const esReceso = RECESOS.some(([ini, fin]) => totalMin >= ini && totalMin < fin)
   if (esReceso) return { descripcion: 'Hora de receso — estudiantes en exteriores del escuela', esReceso: true, esCambio: false }
 
   const esCambio = CAMBIOS.some(c => Math.abs(totalMin - c) <= 5)
-  if (esCambio) return { descripcion: 'Cambio de clase — alto tránsito por pasillos y patios', esReceso: false, esCambio: true }
+  if (esCambio) {
+    const esNocturno = hora >= 18
+    return {
+      descripcion: esNocturno
+        ? 'Cambio de clase nocturno — actividad baja en escuela'
+        : 'Cambio de clase — alto tránsito por pasillos y patios',
+      esReceso: false,
+      esCambio: true,
+      esNocturno,
+    }
+  }
 
-  if (hora >= 7 && hora <= 9) return { descripcion: 'Hora pico matutina — alta afluencia en la escuela', esReceso: false, esCambio: false }
+  if (hora >= 7 && hora <= 9) return { descripcion: 'Hora pico matutina — alta afluencia en escuela', esReceso: false, esCambio: false }
   if (hora >= 12 && hora <= 13) return { descripcion: 'Horario de comida — estudiantes posiblemente en exteriores', esReceso: false, esCambio: false }
   return { descripcion: 'Horario de clases normal — estudiantes principalmente en aulas', esReceso: false, esCambio: false }
 }

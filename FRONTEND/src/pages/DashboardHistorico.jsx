@@ -690,6 +690,6 @@ datalabels: {
           <div className="hist-footer-text" style={{ marginLeft: 8 }}>Generado con datos históricos del sensor Davis</div>
         </div>
       </div>
-    </div>
+    </div>  
   )
 }

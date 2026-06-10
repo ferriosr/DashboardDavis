@@ -417,7 +417,7 @@ export default function HeatmapAQI({ from, to, theme }) {
           </div>
         </div>
       )}
-
+ 
       {data && !loading && (
         <div style={{ display: 'flex', gap: 14, marginTop: 14, flexWrap: 'wrap' }}>
           {LEGEND.map(([color, label]) => (

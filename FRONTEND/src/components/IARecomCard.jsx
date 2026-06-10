@@ -70,7 +70,7 @@ export default function IARecomCard() {
               textTransform: 'uppercase', fontFamily: 'DM Mono, monospace',
               color: data ? style.color : 'var(--text-muted)',
             }}>
-              Recomendación
+              {'Recomendación'}
             </span>
             {data?.fromCache && (
               <span style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: 'DM Mono, monospace' }}>
@@ -206,3 +206,4 @@ export default function IARecomCard() {
     </>
   )
 }
+ 
