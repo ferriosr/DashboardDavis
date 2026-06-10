@@ -1,5 +1,5 @@
-# Microservicio de predicción AQI +1 hora
-# PIPELINE CONSTRUIDO EN EL NOTEBOOK
+# Modelo de predicción AQI +1 hora
+
 
 import pandas as pd
 import numpy as np
@@ -32,12 +32,12 @@ modelo_xgb.load_model(ruta_modelo)
 with open(ruta_features) as f:
     FEATURES = json.load(f)
 
-# ── CONSTANTES (igual que el notebook) ───────────────────────
+#  CONSTANTES (igual que el notebook) 
 FRECUENCIA_MINUTOS = 5
 HORIZONTE_MINUTOS  = 60
 PASOS_ADELANTE     = HORIZONTE_MINUTOS // FRECUENCIA_MINUTOS   # 12
 
-# ── CONFIGURACIÓN DEL PIPELINE ────────────────────────────────
+#  CONFIGURACIÓN DEL PIPELINE 
 # Copiado exactamente del Paso 9.5 — no cambiar nada
 PIPELINE_CONFIG = {
     'features':             FEATURES,
@@ -50,14 +50,14 @@ PIPELINE_CONFIG = {
     'frecuencia_min':       FRECUENCIA_MINUTOS,
 }
 
-# ── BUFFER DE HISTORIAL ───────────────────────────────────────
+#  BUFFER DE HISTORIAL 
 # Tamaño = lag más grande usado = 12 pasos = 60 minutos.
 MAX_HISTORIAL = max(PIPELINE_CONFIG['lags'])   # 12
 cols_buffer   = ['aqi', 'pm25', 'pm10', 'pm1', 'temperatura', 'humedad']
 
 buffer_sensor = deque(maxlen=MAX_HISTORIAL)
 
-# ── SUPABASE ─────────────────────────────────────────────────
+#  SUPABASE 
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_KEY = os.getenv('SUPABASE_KEY')
 
@@ -92,7 +92,7 @@ def inicializar_buffer():
           f'{MAX_HISTORIAL * FRECUENCIA_MINUTOS / 60:.0f} hora de historial)')
 
 
-# ── FUNCIÓN DE PRODUCCIÓN ─────────────────────────────────────
+#  FUNCIÓN DE PRODUCCIÓN 
 # Copiada exactamente del Paso 9.5 — no se cambió nada
 
 def predecir_aqi_produccion(pm1, pm25, pm10, temperatura, humedad,
@@ -208,7 +208,7 @@ def predecir_aqi_produccion(pm1, pm25, pm10, temperatura, humedad,
     return aqi_pred, cat, confianza
 
 
-# ── ENDPOINT ─────────────────────────────────────────────────
+# ENDPOINT 
 
 @app.route('/predecir', methods=['GET'])
 def predecir():

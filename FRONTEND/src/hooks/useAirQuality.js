@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { fetchLatest, fetchHistory } from '../api/davis'
 import { generateNotifications } from '../utils/aqi'
 
-const POLL_MS = 30_000
+const POLL_MS = 90_000
 const MAX_HISTORY = 180
 
 const emptyData = { aqi: 0, humedad: 0, temperatura: 0, pm25: 0, pm10: 0 }

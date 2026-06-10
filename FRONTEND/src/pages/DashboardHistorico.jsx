@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { Chart, registerables } from 'chart.js'
+import ChartDataLabels from 'chartjs-plugin-datalabels'
 import HeatmapAQI from '../components/HeatmapAQI'
 import { TrendingUp, Calendar, Thermometer, AlertTriangle, Link, Radio, Wind } from 'lucide-react'
 
-Chart.register(...registerables)
+Chart.register(...registerables, ChartDataLabels)
 
 const MONTH_SHORT = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
 
@@ -67,7 +68,7 @@ function peakHours(hourly) {
   return { from: hourly[bestIdx].hour, to: hourly[bestIdx + windowSize - 1].hour }
 }
 
-function dynMax(arr, margin = 0.15) {
+function dynMax(arr, margin = 0.22) {
   const max = Math.max(...arr.filter(v => v != null && !isNaN(v)))
   return Math.ceil(max * (1 + margin) / 10) * 10
 }
@@ -131,12 +132,13 @@ export default function DashboardHistorico({ theme }) {
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState(null)
 
-  // period state — shared across all charts
+  // period state — shared across all charts (default: last 30 days)
   const today = todayStr()
-  const [pendingFrom, setPendingFrom] = useState('')
-  const [pendingTo,   setPendingTo]   = useState('')
-  const [appliedFrom, setAppliedFrom] = useState('')
-  const [appliedTo,   setAppliedTo]   = useState('')
+  const defaultFrom = daysAgoStr(30)
+  const [pendingFrom, setPendingFrom] = useState(defaultFrom)
+  const [pendingTo,   setPendingTo]   = useState(today)
+  const [appliedFrom, setAppliedFrom] = useState(defaultFrom)
+  const [appliedTo,   setAppliedTo]   = useState(today)
 
   const monthlyAQIRef = useRef(null)
   const hourlyRef     = useRef(null)
@@ -156,7 +158,7 @@ export default function DashboardHistorico({ theme }) {
       .catch(e => { setError(e.message); setLoading(false) })
   }
 
-  useEffect(() => { fetchStats(appliedFrom, appliedTo) }, [])  // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchStats(defaultFrom, today) }, [])  // eslint-disable-line react-hooks/exhaustive-deps
 
   function apply() {
     setAppliedFrom(pendingFrom)
@@ -216,7 +218,18 @@ export default function DashboardHistorico({ theme }) {
         },
         options: {
           responsive: true, maintainAspectRatio: false,
-          plugins: { legend: { display: false }, tooltip: TOOLTIP },
+          plugins: {
+            legend: { display: false },
+            tooltip: TOOLTIP,
+            datalabels: {
+              anchor: 'end',
+              align: 'top',
+              offset: 2,
+              formatter: (v) => Math.round(v),
+              font: { family: 'DM Mono, monospace', size: 10, weight: '600' },
+              color: (ctx) => barColor(ctx.dataset.data[ctx.dataIndex]),
+            },
+          },
           scales: { ...BASE_SCALES, y: { ...BASE_SCALES.y, min: 0, max: dynMax(mAQI) } },
         },
       })
@@ -247,7 +260,19 @@ export default function DashboardHistorico({ theme }) {
         },
         options: {
           responsive: true, maintainAspectRatio: false,
-          plugins: { legend: { display: false }, tooltip: TOOLTIP },
+          plugins: {
+            legend: { display: false },
+            tooltip: TOOLTIP,
+            datalabels: {
+              display: (ctx) => ctx.dataIndex % 3 === 0,
+              anchor: 'end',
+              align: 'top',
+              offset: 2,
+              formatter: (v) => Math.round(v),
+              font: { family: 'DM Mono, monospace', size: 9 },
+              color: (ctx) => ctx.datasetIndex === 0 ? '#f07c3a' : '#2cc4b5',
+            },
+          },
           scales: { ...BASE_SCALES, y: { ...BASE_SCALES.y, min: Math.max(0, dynMin(allHourly)), max: dynMax(allHourly) } },
         },
       })
@@ -278,7 +303,18 @@ export default function DashboardHistorico({ theme }) {
         },
         options: {
           responsive: true, maintainAspectRatio: false,
-          plugins: { legend: { display: false }, tooltip: TOOLTIP },
+          plugins: {
+            legend: { display: false },
+            tooltip: TOOLTIP,
+            datalabels: {
+              anchor: 'end',
+              align: 'top',
+              offset: 3,
+              formatter: (v, ctx) => ctx.datasetIndex === 0 ? v.toFixed(1) + '°' : Math.round(v) + '%',
+              font: { family: 'DM Mono, monospace', size: 9 },
+              color: (ctx) => ctx.datasetIndex === 0 ? '#f5c842' : '#4d9de0',
+            },
+          },
           scales: {
             x: { ticks: { color: dark ? '#4a5568' : '#b2bec3' }, grid: { display: false } },
             y:  { ticks: { color: '#f5c842', callback: v => v + '°' }, grid: { color: dark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.05)' }, min: dynMin(mTemp), max: dynMax(mTemp) },
@@ -302,7 +338,27 @@ export default function DashboardHistorico({ theme }) {
         },
         options: {
           responsive: true, maintainAspectRatio: false,
-          plugins: { legend: { display: false }, tooltip: TOOLTIP },
+          plugins: {
+            legend: { display: false },
+            tooltip: TOOLTIP,
+datalabels: {
+  anchor: 'end',
+  align: 'end',
+  
+  offset: 2,
+
+  formatter: (v) => Number(v).toFixed(1),
+
+  font: {
+    family: 'DM Mono, monospace',
+    size: 9,
+    weight: '600',
+  },
+
+  color: (ctx) =>
+    ['#9b7ef8', '#f07c3a', '#4d9de0'][ctx.datasetIndex],
+}
+          },
           scales: { ...BASE_SCALES, y: { ...BASE_SCALES.y, min: 0, max: dynMax(allPM) } },
         },
       })

@@ -1,8 +1,9 @@
 import { useEffect, useRef } from 'react'
 import { Chart, registerables } from 'chart.js'
+import ChartDataLabels from 'chartjs-plugin-datalabels'
 import { TrendingUp } from 'lucide-react'
 
-Chart.register(...registerables)
+Chart.register(...registerables, ChartDataLabels)
 
 export default function TrendChart({ history, theme }) {
   const canvasRef = useRef(null)
@@ -21,7 +22,8 @@ export default function TrendChart({ history, theme }) {
             borderColor: '#2D62ED',
             backgroundColor: 'rgba(45,98,237,0.07)',
             tension: 0.4,
-            pointRadius: 0,
+            pointRadius: 3,
+            pointBackgroundColor: '#2D62ED',
             borderWidth: 2.5,
             fill: true,
           },
@@ -31,7 +33,8 @@ export default function TrendChart({ history, theme }) {
             borderColor: '#00C853',
             backgroundColor: 'rgba(0,230,118,0.05)',
             tension: 0.4,
-            pointRadius: 0,
+            pointRadius: 2,
+            pointBackgroundColor: '#00C853',
             borderWidth: 2,
             fill: true,
           },
@@ -41,7 +44,8 @@ export default function TrendChart({ history, theme }) {
             borderColor: '#FF9800',
             backgroundColor: 'rgba(255,152,0,0.05)',
             tension: 0.4,
-            pointRadius: 0,
+            pointRadius: 2,
+            pointBackgroundColor: '#FF9800',
             borderWidth: 2,
             fill: true,
           },
@@ -49,6 +53,7 @@ export default function TrendChart({ history, theme }) {
       },
       options: {
         responsive: true,
+        clip: false,
         interaction: { mode: 'index', intersect: false },
         plugins: {
           legend: { display: false },
@@ -61,6 +66,15 @@ export default function TrendChart({ history, theme }) {
             padding: 12,
             titleFont: { family: "'DM Sans'", weight: '700' },
             bodyFont: { family: "'DM Sans'" },
+          },
+          datalabels: {
+            display: (ctx) => ctx.dataIndex % 5 === 0,
+            anchor: 'end',
+            align: 'top',
+            offset: 2,
+            formatter: (v) => Math.round(v),
+            font: { family: "'DM Mono'", size: 9 },
+            color: (ctx) => ['#2D62ED', '#00C853', '#FF9800'][ctx.datasetIndex],
           },
         },
         scales: {
@@ -127,3 +141,4 @@ export default function TrendChart({ history, theme }) {
     </div>
   )
 }
+

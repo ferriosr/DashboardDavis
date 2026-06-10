@@ -131,7 +131,7 @@ export default function DashboardCalidadAire({ data, history, theme, cameraOnlin
             <div className="video-placeholder">
               {cameraOnline && !videoError ? (
                 <img
-                  src="http://192.168.100.180:5000/video_feed"
+                  src="http://localhost:5000/video_feed"
                   alt="Video Isla"
                   className="video-feed-preview"
                   onError={handleVideoError}

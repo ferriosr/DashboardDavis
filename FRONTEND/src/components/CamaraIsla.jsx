@@ -10,7 +10,7 @@ export default function CamaraIslaDashboard() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const metaRes = await fetch('http://192.168.100.180:5000/status', {
+        const metaRes = await fetch('http://localhost:5000/status', {
           signal: AbortSignal.timeout(3000) // Timeout de 3 segundos
         })
         if (metaRes.ok) {
@@ -77,12 +77,11 @@ export default function CamaraIslaDashboard() {
         <div className="cam-card cam-card-full">
           <div className="cam-card-header">
             <span className="cam-card-title">Video en Vivo</span>
-            <span className="cam-pill cam-pill-blue">192.168.100.180</span>
           </div>
           <div className="cam-feed-wrap">
             {cameraOnline && !videoError ? (
               <img
-                src="http://192.168.100.180:5000/video_feed"
+                src="http://localhost:5000/video_feed"
                 alt="Video Isla"
                 className="cam-stream"
                 onError={handleVideoError}

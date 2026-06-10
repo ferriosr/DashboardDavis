@@ -105,7 +105,7 @@ export default function Modelo({ theme }) {
     const grid    = dark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.05)'
     const TOOLTIP = makeTooltip(dark)
 
-    const MAX_PUNTOS = 300
+    const MAX_PUNTOS = 200
     const step    = Math.max(1, Math.floor(testData.length / MAX_PUNTOS))
     const muestra = testData.filter((_, i) => i % step === 0)
 
@@ -155,15 +155,18 @@ export default function Modelo({ theme }) {
               label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y} AQI`,
             },
           },
+          //Agregar para quitra los puntos
+          datalabels: { display: false },
         },
         scales: {
           x: {
             ticks: {
               color: tick,
-              maxRotation: 25,
+              maxRotation: 45,
+              minRotation: 45,
               autoSkip: true,
-              maxTicksLimit: 12,
-              font: { size: 10, family: 'DM Mono, monospace' },
+              maxTicksLimit: 15,
+              font: { size: 9, family: 'DM Mono, monospace' },
             },
             grid: { display: false },
           },
@@ -333,9 +336,11 @@ export default function Modelo({ theme }) {
           </div>
           <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
             {[
-              { label: 'MAE',   value: '9.23 pts' },
-              { label: 'R²',    value: '0.371'    },
-              { label: 'Error', value: '8.7%'     },
+              { label: 'MAE',   value: '4.58 pts' },
+              { label: 'R²',    value: '0.835'    },
+              { label: 'Error', value: '2.2%'     },
+              { label: 'RMSE', value: '7.72 pts'  },
+          
             ].map(({ label, value }) => (
               <div key={label} style={{
                 flex: 1, background: 'var(--card-bg)',

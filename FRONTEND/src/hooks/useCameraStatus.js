@@ -13,7 +13,7 @@ export function useCameraStatus() {
 
   const fetchCameraData = useCallback(async () => {
     try {
-      const response = await fetch('http://192.168.100.180:5000/status', {
+      const response = await fetch('http://localhost:5000/status', {
         signal: AbortSignal.timeout(3000)
       })
       if (response.ok) {
